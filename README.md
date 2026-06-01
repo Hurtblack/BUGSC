@@ -113,46 +113,64 @@ app/src/main/
 
 ## 数据维护
 
+> 维护脚本都在 `tools/`，均为独立 Python 3 脚本，**App 运行时不依赖它们**。
+> 多数数据支持热更新：脚本产出带 `version` 字段，递增后上传 CDN，App 比对版本自动拉新（见 `BlueprintDataRepository`）。
+
 ### BUG 条目
 
 编辑 `BugData.kt`，直接硬编码。字段说明见 `Bug.kt`。
 
-### 蓝图数据
+### 蓝图 / 物品属性 / 翻译
 
-| 文件 | 更新方式 |
-|---|---|
-| `sccraft_blueprints.json` | 从 SC Craft 导出 |
-| `scm_blueprint_missions.json` | flowcld SCM 公开接口 |
-| `scm_translations.json` | flowcld SCM 翻译接口 |
-| `item_base_stats.json` | SC Wiki / 手工整理 |
-| `scm_blueprint_hints.json` | 手工维护备注提示 |
+游戏版本更新后的完整流程见 **[`tools/BLUEPRINT_DATA_MAINTENANCE.md`](tools/BLUEPRINT_DATA_MAINTENANCE.md)**（Runbook）。涉及脚本：
 
-### 飞船配装数据
+| 脚本 | 产出（`assets/blueprint/`） | 来源 |
+|---|---|---|
+| `gen_sccraft_blueprints.py` | `sccraft_blueprints.json` | sc-craft.tools（配方品质曲线 + 任务列表） |
+| `gen_item_base_stats.py` | `item_base_stats.json` | star-citizen.wiki（物品基准属性值） |
+| `gen_blueprint_missions.py` | `scm_blueprint_missions.json` | flowcld SCM（奖励任务详情） |
+| `gen_mission_translations.py` | `mission_translations.json` | flowcld SCM（任务名 EN→中） |
+| `export_scm_data.py` | `scm_translations.json` 等 | flowcld SCM（翻译表 + 配方线索） |
+| 手工维护 | `scm_blueprint_hints.json` | 备注/提示 |
 
-**更新 UEX 组件/飞船列表**（`uex_shipfit_dataset.json`）：
+> 发布时把脚本的 `--version` 递增（整数），App 据此判断是否下载新数据。
+
+### 矿物
+
+数据来自 Star Miner (sm.scmdb.net) + flowcld SCM 翻译。文件名带 SC 版本号会变，脚本会自动解析最新文件名。**有依赖顺序：先跑 `export_mining_data.py`**（另两个脚本要读它产出的 `mining_data.json`）：
+
+| 脚本 | 产出（`assets/mining/`） | 说明 |
+|---|---|---|
+| `export_mining_data.py` | `mining_data.json` · `mining_equipment.json` · `manifest.json` | 矿物/组合/地点 + 激光器/模块（并发抓取） |
+| `export_mining_translations.py` | `element_translations.json` | 矿物英文名→中文；`--refresh` 忽略缓存重抓 |
+| `export_location_translations.py` | `location_translations.json` | 星系/地点/类型译名（手工字典，缺失会打印 MISS 提示补齐） |
+
 ```bash
-# 从 UEX API 2.0 拉取最新数据
-curl https://api.uexcorp.uk/2.0/... > uex_shipfit_dataset.json
+python3 tools/export_mining_data.py          # 必须先跑
+python3 tools/export_mining_translations.py
+python3 tools/export_location_translations.py
 ```
 
-**更新 Erkul 槽位**（`erkul_ship_slots_live.json`）：从 Erkul 导出最新版本替换文件。
+### 飞船配装
 
-**重建电量数据**（`component_power.json`）：
+| 文件（`assets/shipfit/`） | 更新方式 |
+|---|---|
+| `uex_shipfit_dataset.json` | 从 UEX API 2.0 拉取替换（组件/飞船列表） |
+| `erkul_ship_slots_live.json` | 从 Erkul 导出最新版本替换 |
+| `zh_aliases.json` | 手工维护 `ships` / `components` 两个 key |
+| `component_power.json` | 暂无独立脚本，按下方逻辑用临时脚本重建 |
 
-项目根目录下运行以下脚本（需要 Python 3，联网）：
+**重建 `component_power.json`**（需 Python 3，联网）：
+1. 读取 `uex_shipfit_dataset.json` 中所有带 UUID 的组件
+2. 批量查询 `https://api.star-citizen.wiki/api/v2/items/{uuid}`
+3. 发电机取 `power_plant.power_segment_generation`；其他组件取 `resource_network.usage.power.maximum`
+4. 输出 `{uex_id: {type, value}}` 写入 `component_power.json`
 
-```python
-# 脚本逻辑：
-# 1. 读取 uex_shipfit_dataset.json 中所有有 UUID 的组件
-# 2. 按 UUID 批量查询 https://api.star-citizen.wiki/api/v2/items/{uuid}
-# 3. 发电机取 power_plant.power_segment_generation
-# 4. 其他组件取 resource_network.usage.power.maximum
-# 5. 输出 {uex_id: {type, value}} 写入 component_power.json
-```
+> 当前覆盖：发电机 73 · 量子驱动 56 · 护盾 62 · 冷却器 68 · 武器 107，共 368 条；雷达无 UUID，按尺寸公式兜底。
 
-目前覆盖：发电机 73 条 · 量子驱动 56 条 · 护盾 62 条 · 冷却器 68 条 · 武器 107 条，共 368 条。雷达无 UUID，使用尺寸公式兜底。
+### 维克洛兑换
 
-**更新中文别名**（`zh_aliases.json`）：手工维护 `ships` 和 `components` 两个 key。
+`assets/wikelo/banu_materials.json`、`banu_trades.json` 目前为**手工维护**（无脚本）。游戏内巴努交易清单变动时手动更新对应文件。
 
 ---
 

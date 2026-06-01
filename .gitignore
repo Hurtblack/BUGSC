@@ -15,6 +15,10 @@ build/
 .cxx
 local.properties
 
+# Python 维护脚本缓存
+__pycache__/
+*.pyc
+
 # 签名相关 - 永不入仓库
 *.jks
 *.keystore
