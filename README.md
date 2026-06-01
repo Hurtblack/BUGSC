@@ -11,14 +11,18 @@ QQ群：330941212
 
 ## 功能模块
 
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
-| 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exectimer.com） |
-| 库存查看 | ONLINE | RSI 账号登录后拉取飞船/装备库存 |
-| 角色修复 | RSI | 跳转 RSI 账号重置页执行 CHARACTER REPAIR |
-| 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
-| 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算 |
+底部三栏导航，进入默认在「工具」页：
+
+| Tab | 模块 | 状态 | 说明 |
+|---|---|---|---|
+| **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
+| **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exectimer.com） |
+| **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
+| **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算 |
+| **查询** | 维克洛兑换 | 4.8.0 | 巴努交易清单、兑换材料反查、声望需求 |
+| **查询** | 矿物查询 | 4.7.0 | 矿石分布、出现概率、稀有度、含量范围 |
+| **个人信息** | 库存查看 | ONLINE | RSI 账号登录后拉取飞船/装备库存 |
+| **个人信息** | 角色修复 | RSI | 跳转 RSI 账号重置页执行 CHARACTER REPAIR |
 
 ---
 
@@ -27,7 +31,7 @@ QQ群：330941212
 - **语言**：Kotlin
 - **最低 SDK**：API 24（Android 7.0）
 - **目标 SDK**：API 36
-- **UI**：View + ViewBinding，Navigation Component 单 Activity
+- **UI**：View + ViewBinding 为主，Navigation Component 单 Activity；底部栏用 Jetpack Compose（mobiGlas 风格三栏导航，逐步向 Compose 迁移）
 - **网络**：`HttpURLConnection`（库存/图片拉取）、`WebView`（RSI 登录）
 - **异步**：Kotlin Coroutines
 - **序列化**：`org.json`（系统内置）
