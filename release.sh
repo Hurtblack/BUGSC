@@ -68,7 +68,7 @@ git push origin "$TAG"
 # ---- GitHub Release ----
 echo "▶ 创建 GitHub Release 并上传 APK..."
 REMOTE_URL=$(git remote get-url origin)
-REPO=$(echo "$REMOTE_URL" | sed -E 's#.*github.com[:/]([^/]+/[^/]+?)(\.git)?$#\1#')
+REPO=$(echo "$REMOTE_URL" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
 TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill 2>/dev/null | sed -n 's/^password=//p')
 if [ -z "$TOKEN" ]; then
   echo "⚠ 取不到 GitHub 凭证，代码/tag 已推送，但 Release 需手动创建。"
