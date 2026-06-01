@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hud_screen_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1"
+                android:text="问题标题"
+                android:textColor="@color/sc_accent"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="建议写清模块 + 现象，方便检索"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="11sp" />
+
+            <EditText
+                android:id="@+id/et_title"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/input_bg"
+                android:hint="标题（必填）"
+                android:inputType="text"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1"
+                android:text="问题内容"
+                android:textColor="@color/sc_accent"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/et_summary"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/input_bg"
+                android:gravity="top"
+                android:hint="摘要（必填）"
+                android:inputType="textMultiLine"
+                android:padding="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/et_description"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:gravity="top"
+                android:hint="详细描述（可选）"
+                android:inputType="textMultiLine"
+                android:padding="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/et_type_tags"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:hint="分类标签（空格或逗号分隔）"
+                android:inputType="text"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <Spinner
+                android:id="@+id/spinner_severity"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:padding="10dp" />
+
+            <Spinner
+                android:id="@+id/spinner_gpu"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:padding="10dp" />
+
+            <Spinner
+                android:id="@+id/spinner_cpu"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:padding="10dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.1"
+                android:text="最低硬件要求"
+                android:textColor="@color/sc_accent"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="可选填写，单位 GB"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="11sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="最低显存"
+                        android:textColor="@color/sc_text_mid"
+                        android:textSize="12sp" />
+
+                    <EditText
+                        android:id="@+id/et_vram"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:background="@drawable/input_bg"
+                        android:hint="例如 4"
+                        android:inputType="number"
+                        android:paddingHorizontal="10dp"
+                        android:textColor="@color/sc_text"
+                        android:textColorHint="@color/sc_text_dim"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="最低内存"
+                        android:textColor="@color/sc_text_mid"
+                        android:textSize="12sp" />
+
+                    <EditText
+                        android:id="@+id/et_ram"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:background="@drawable/input_bg"
+                        android:hint="例如 16"
+                        android:inputType="number"
+                        android:paddingHorizontal="10dp"
+                        android:textColor="@color/sc_text"
+                        android:textColorHint="@color/sc_text_dim"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <EditText
+                android:id="@+id/et_steps"
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:gravity="top"
+                android:hint="解决步骤（必填，每行一条）"
+                android:inputType="textMultiLine"
+                android:padding="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/et_notes"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/input_bg"
+                android:gravity="top"
+                android:hint="注意事项（可选）"
+                android:inputType="textMultiLine"
+                android:padding="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btn_submit"
+                style="?android:attr/buttonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="@color/sc_accent"
+                android:letterSpacing="0.1"
+                android:text="提交到本地"
+                android:textColor="@color/sc_ink"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btn_submit_ic"
+                style="?android:attr/buttonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/sc_ok"
+                android:letterSpacing="0.1"
+                android:text="复制模板并打开 IC"
+                android:textColor="@color/sc_ink"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

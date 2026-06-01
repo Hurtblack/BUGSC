@@ -1,0 +1,14 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Star Citizen HUD theme (always dark) -->
+    <style name="Base.Theme.Bug公民" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/sc_accent</item>
+        <item name="colorOnPrimary">@color/sc_ink</item>
+        <item name="colorSecondary">@color/sc_accent_dim</item>
+        <item name="colorSurface">@color/sc_panel</item>
+        <item name="colorOnSurface">@color/sc_text</item>
+        <item name="android:colorBackground">@color/sc_bg</item>
+        <item name="android:statusBarColor">@color/sc_bg_deep</item>
+        <item name="android:navigationBarColor">@color/sc_bg_deep</item>
+        <item name="android:windowBackground">@color/sc_bg</item>
+    </style>
+</resources>

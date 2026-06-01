@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hud_screen_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:letterSpacing="0.1"
+                android:text="BUG REGISTRY"
+                android:textColor="@color/sc_text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btn_submit"
+                style="?android:attr/buttonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/sc_accent"
+                android:letterSpacing="0.08"
+                android:text="+ NEW"
+                android:textColor="@color/sc_ink"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Import section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <EditText
+                android:id="@+id/et_share_code"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:background="@drawable/input_bg"
+                android:fontFamily="monospace"
+                android:gravity="top"
+                android:hint="粘贴 BUG| 开头的分享码"
+                android:inputType="textMultiLine"
+                android:padding="8dp"
+                android:textColor="@color/sc_warn"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_import"
+                style="?android:attr/buttonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:backgroundTint="@color/sc_warn"
+                android:letterSpacing="0.08"
+                android:text="导入分享"
+                android:textColor="@color/sc_ink"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Search row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/et_search"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@drawable/input_bg"
+                android:hint="搜索标题/摘要/步骤/备注/硬件关键词"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_search"
+                style="?android:attr/buttonStyle"
+                android:layout_width="80dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/sc_accent"
+                android:letterSpacing="0.08"
+                android:text="搜索"
+                android:textColor="@color/sc_ink"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Filters -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:orientation="horizontal">
+
+                <Spinner
+                    android:id="@+id/spinner_gpu"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/input_bg"
+                    android:padding="8dp" />
+
+                <Spinner
+                    android:id="@+id/spinner_cpu"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/input_bg"
+                    android:padding="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:orientation="horizontal">
+
+                <Spinner
+                    android:id="@+id/spinner_vram"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/input_bg"
+                    android:padding="8dp" />
+
+                <Spinner
+                    android:id="@+id/spinner_ram"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/input_bg"
+                    android:padding="8dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:orientation="horizontal">
+
+                <Spinner
+                    android:id="@+id/spinner_sort"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/input_bg"
+                    android:padding="8dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/input_bg"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="10dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="只看收藏"
+                        android:textColor="@color/sc_text_mid"
+                        android:textSize="13sp" />
+
+                    <Switch
+                        android:id="@+id/switch_fav"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:thumbTint="@color/sc_accent"
+                        android:trackTint="@color/sc_line2" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Type tags -->
+            <LinearLayout
+                android:id="@+id/container_tags"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:orientation="horizontal" />
+
+            <Button
+                android:id="@+id/btn_clear"
+                style="?android:attr/buttonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/sc_panel2"
+                android:text="清空筛选"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Empty state -->
+        <TextView
+            android:id="@+id/tv_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_bg"
+            android:gravity="center"
+            android:padding="16dp"
+            android:text="未找到匹配的 Bug，尝试减少筛选条件"
+            android:textColor="@color/sc_text_mid"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- Bug list -->
+        <LinearLayout
+            android:id="@+id/container_bugs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+    </LinearLayout>
+</ScrollView>

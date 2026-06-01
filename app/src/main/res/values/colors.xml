@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Star Citizen HUD tokens -->
+    <color name="sc_bg">#060A10</color>
+    <color name="sc_bg_deep">#04070D</color>
+    <color name="sc_panel">#0D1620</color>
+    <color name="sc_panel2">#111D2B</color>
+    <color name="sc_line">#1B3145</color>
+    <color name="sc_line2">#2A4862</color>
+    <color name="sc_accent">#21D4FF</color>
+    <color name="sc_accent_dim">#16A3C7</color>
+    <color name="sc_accent_ink">#1F21D4FF</color>
+    <color name="sc_warn">#FF8A3D</color>
+    <color name="sc_danger">#FF4565</color>
+    <color name="sc_ok">#4ADE80</color>
+    <color name="sc_text">#D8EAF2</color>
+    <color name="sc_text_mid">#7C95A8</color>
+    <color name="sc_text_dim">#4A6377</color>
+    <color name="sc_ink">#001119</color>
+
+    <!-- Wikelo badge backgrounds (low-alpha tints) -->
+    <color name="sc_warn_ink">#33FF8A3D</color>
+    <color name="sc_ok_ink">#334ADE80</color>
+    <color name="sc_danger_ink">#33FF4565</color>
+    <color name="sc_purple">#C89BFF</color>
+    <color name="sc_purple_ink">#33C89BFF</color>
+</resources>

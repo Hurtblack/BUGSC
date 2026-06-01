@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- deep space base -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#050810"
+                android:centerColor="#060A12"
+                android:endColor="#04070D"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item>
+        <bitmap
+            android:src="@drawable/tex_grid"
+            android:tileMode="repeat" />
+    </item>
+    <item>
+        <bitmap
+            android:src="@drawable/tex_scanlines"
+            android:tileMode="repeat" />
+    </item>
+    <!-- cyan uplink glow from the top -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.5"
+                android:centerY="0.0"
+                android:gradientRadius="640"
+                android:startColor="#2221D4FF"
+                android:endColor="#0021D4FF" />
+        </shape>
+    </item>
+</layer-list>

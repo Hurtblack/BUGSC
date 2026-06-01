@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
+    android:background="@drawable/card_bg"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <!-- 顶部行: (可选) 图片 + 名字/获得物 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <!-- TODO: 接入兑换物图片后通过 imageAsset 加载, 默认 gone -->
+        <ImageView
+            android:id="@+id/iv_reward"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/wikelo_reward_placeholder"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_name_cn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:letterSpacing="0.04"
+                android:textColor="@color/sc_text"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="北极星 维克洛特别版" />
+
+            <TextView
+                android:id="@+id/tv_name_en"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textColor="@color/sc_text_dim"
+                android:textSize="10sp"
+                tools:text="Now make POLARIS" />
+
+            <TextView
+                android:id="@+id/tv_reward"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:textColor="@color/sc_warn"
+                android:textSize="13sp"
+                tools:text="🎁 北极星 (Polaris)" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 徽章行 (动态填充) -->
+    <LinearLayout
+        android:id="@+id/container_badges"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal" />
+
+    <!-- 分隔 + 材料列表 (动态填充) -->
+    <View
+        android:id="@+id/divider_mats"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:background="@color/sc_line"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/container_mats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical" />
+
+    <TextView
+        android:id="@+id/tv_notes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:fontFamily="monospace"
+        android:textColor="@color/sc_text_dim"
+        android:textSize="10sp"
+        android:visibility="gone"
+        tools:text="// 需 3 级声望"
+        tools:visibility="visible" />
+</LinearLayout>

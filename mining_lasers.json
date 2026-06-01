@@ -1,0 +1,324 @@
+{
+  "meta": {
+    "title": "采矿激光器总览",
+    "version": "4.8.0-LIVE.11875683",
+    "count": 17,
+    "source": "SCM V3",
+    "field_notes": {
+      "size": "尺寸: S2 / S1 / S0",
+      "grade": "等级 (rarity/quality), e.g. A",
+      "optimal_range_m": "最佳工作距离 (米)",
+      "max_range_m": "最大工作距离 (米)",
+      "mining_power": "采矿功率范围 (min-max)，null 表示数据缺失",
+      "extraction_power": "提取功率，null 表示数据缺失",
+      "module_slots": "模组槽位数量",
+      "effects": "属性效果, 值为百分比 (正负)。包含: instability(不稳定度), optimal_window(最佳窗口), resistance(抗性), charge_rate(充能速率), inert_material_filter(惰性材料过滤)",
+      "purchase_locations": "购买地点"
+    }
+  },
+  "lasers": [
+    {
+      "name_cn": "霍夫斯泰德-S2",
+      "name_en": "Hofstede-S2 Mining Laser",
+      "size": "S2",
+      "grade": "A",
+      "optimal_range_m": 60,
+      "max_range_m": 180,
+      "mining_power": { "min": 336, "max": 3360 },
+      "extraction_power": 1295,
+      "module_slots": 2,
+      "effects": {
+        "instability": 10,
+        "optimal_window": 60,
+        "resistance": -30,
+        "charge_rate": 20,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": "六角湾 / 尼克斯星门 / 废墟 / 弧L1 / 弧L2 等13处"
+    },
+    {
+      "name_cn": "刀轴MH2",
+      "name_en": "Arbor MH2 Mining Laser",
+      "size": "S2",
+      "grade": "A",
+      "optimal_range_m": 90,
+      "max_range_m": 270,
+      "mining_power": { "min": 480, "max": 2400 },
+      "extraction_power": 2590,
+      "module_slots": 2,
+      "effects": {
+        "instability": -35,
+        "optimal_window": 40,
+        "resistance": 25,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": "六角湾 / 弧L4 / 微L5 / 新巴贝奇 / 罗威尔"
+    },
+    {
+      "name_cn": "克莱恩-S2",
+      "name_en": "Klein-S2 Mining Laser",
+      "size": "S2",
+      "grade": "A",
+      "optimal_range_m": 60,
+      "max_range_m": 180,
+      "mining_power": { "min": 720, "max": 3600 },
+      "extraction_power": 2775,
+      "module_slots": 1,
+      "effects": {
+        "instability": 35,
+        "optimal_window": 20,
+        "resistance": -45,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": "列夫斯基 / 新巴贝奇"
+    },
+    {
+      "name_cn": "柳叶刀MH2",
+      "name_en": "Lancet MH2 Mining Laser",
+      "size": "S2",
+      "grade": "A",
+      "optimal_range_m": 45,
+      "max_range_m": 135,
+      "mining_power": { "min": 900, "max": 3600 },
+      "extraction_power": 2590,
+      "module_slots": 2,
+      "effects": {
+        "instability": -10,
+        "optimal_window": -60,
+        "charge_rate": 40,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": "18区 / 六角湾 / 列夫斯基 / 尼克斯星门 / 微L1 等11处"
+    },
+    {
+      "name_cn": "螺旋II",
+      "name_en": "Helix II Mining Laser",
+      "size": "S2",
+      "grade": "A",
+      "optimal_range_m": 30,
+      "max_range_m": 90,
+      "mining_power": { "min": 1020, "max": 4080 },
+      "extraction_power": 2590,
+      "module_slots": 3,
+      "effects": {
+        "optimal_window": -40,
+        "resistance": -30,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": "18区 / 列夫斯基 / 十L1 / 尼克斯星门 / 微L1 等12处"
+    },
+    {
+      "name_cn": "冲击II",
+      "name_en": "Impact II Mining Laser",
+      "size": "S2",
+      "grade": "A",
+      "optimal_range_m": 60,
+      "max_range_m": 180,
+      "mining_power": { "min": 840, "max": 3360 },
+      "extraction_power": 3145,
+      "module_slots": 3,
+      "effects": {
+        "instability": -10,
+        "optimal_window": 20,
+        "resistance": 10,
+        "charge_rate": -40,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": "18区 / 列夫斯基 / 十L1 / 尼克斯星门 / 弧L2 等14处"
+    },
+    {
+      "name_cn": "霍夫斯泰德-S1",
+      "name_en": "Hofstede-S1 Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 45,
+      "max_range_m": 135,
+      "mining_power": { "min": 105, "max": 2100 },
+      "extraction_power": 1295,
+      "module_slots": 1,
+      "effects": {
+        "instability": 10,
+        "optimal_window": 60,
+        "resistance": -30,
+        "charge_rate": 20,
+        "inert_material_filter": 30
+      },
+      "purchase_locations": "18区 / 列夫斯基 / 微L5 / 斯坦顿星门 / 新巴贝奇 等8处"
+    },
+    {
+      "name_cn": "刀轴MH1",
+      "name_en": "Arbor MH1 Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 60,
+      "max_range_m": 180,
+      "mining_power": { "min": 189, "max": 1890 },
+      "extraction_power": 1850,
+      "module_slots": 1,
+      "effects": {
+        "instability": -35,
+        "optimal_window": 40,
+        "resistance": 25,
+        "inert_material_filter": 30
+      },
+      "purchase_locations": "18区 / 六角湾 / 十L1 / 微L1 / 新巴贝奇 等6处"
+    },
+    {
+      "name_cn": "克莱恩-S1",
+      "name_en": "Klein-S1 Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 45,
+      "max_range_m": 135,
+      "mining_power": { "min": 378, "max": 2220 },
+      "extraction_power": 2220,
+      "module_slots": 0,
+      "effects": {
+        "instability": 35,
+        "optimal_window": 20,
+        "resistance": -45,
+        "inert_material_filter": 30
+      },
+      "purchase_locations": "列夫斯基 / 新巴贝奇"
+    },
+    {
+      "name_cn": "柳叶刀MH1",
+      "name_en": "Lancet MH1 Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 30,
+      "max_range_m": 90,
+      "mining_power": { "min": 504, "max": 2520 },
+      "extraction_power": 1850,
+      "module_slots": 1,
+      "effects": {
+        "instability": -10,
+        "optimal_window": -60,
+        "charge_rate": 40,
+        "inert_material_filter": 30
+      },
+      "purchase_locations": "十L1 / 尼克斯星门 / 废墟 / 弧L1 / 弧L2 等15处"
+    },
+    {
+      "name_cn": "螺旋I",
+      "name_en": "Helix I Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 15,
+      "max_range_m": 45,
+      "mining_power": { "min": 630, "max": 3150 },
+      "extraction_power": 1850,
+      "module_slots": 2,
+      "effects": {
+        "optimal_window": -40,
+        "resistance": -30,
+        "inert_material_filter": 30
+      },
+      "purchase_locations": "18区 / 六角湾 / 十L1 / 尼克斯星门 / 废墟 等13处"
+    },
+    {
+      "name_cn": "冲击I",
+      "name_en": "Impact I Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 45,
+      "max_range_m": 135,
+      "mining_power": { "min": 420, "max": 2100 },
+      "extraction_power": 2775,
+      "module_slots": 2,
+      "effects": {
+        "instability": -10,
+        "optimal_window": 20,
+        "resistance": 10,
+        "charge_rate": -40,
+        "inert_material_filter": 30
+      },
+      "purchase_locations": "18区 / 六角湾 / 废墟 / 弧L1 / 微L5 等7处"
+    },
+    {
+      "name_cn": "石工",
+      "name_en": "Pitman Mining Laser",
+      "size": "S1",
+      "grade": "A",
+      "optimal_range_m": 40,
+      "max_range_m": 45,
+      "mining_power": null,
+      "extraction_power": null,
+      "module_slots": 2,
+      "effects": {
+        "instability": 35,
+        "optimal_window": 40,
+        "resistance": 25,
+        "charge_rate": -40,
+        "inert_material_filter": 40
+      },
+      "purchase_locations": null
+    },
+    {
+      "name_cn": "刀轴MHV",
+      "name_en": "Arbor MHV Mining Laser",
+      "size": "S0",
+      "grade": "A",
+      "optimal_range_m": null,
+      "max_range_m": null,
+      "mining_power": null,
+      "extraction_power": null,
+      "module_slots": 0,
+      "effects": {
+        "instability": -40
+      },
+      "purchase_locations": "18区 / 六角湾 / 列夫斯基 / 十L1 / 尼克斯星门 等21处"
+    },
+    {
+      "name_cn": "S00霍夫斯泰德",
+      "name_en": "S00 Hofstede",
+      "size": "S0",
+      "grade": "A",
+      "optimal_range_m": 30,
+      "max_range_m": 30,
+      "mining_power": null,
+      "extraction_power": null,
+      "module_slots": 0,
+      "effects": {
+        "instability": 30,
+        "optimal_window": 40,
+        "resistance": -40,
+        "charge_rate": 20
+      },
+      "purchase_locations": "18区 / 六角湾 / 列夫斯基 / 十L1 / 尼克斯星门 等21处"
+    },
+    {
+      "name_cn": "劳森",
+      "name_en": "Lawson Mining Laser",
+      "size": "S0",
+      "grade": "A",
+      "optimal_range_m": 25,
+      "max_range_m": 25,
+      "mining_power": null,
+      "extraction_power": null,
+      "module_slots": 0,
+      "effects": {
+        "instability": 30,
+        "optimal_window": 40,
+        "resistance": -40
+      },
+      "purchase_locations": "列夫斯基 / 新巴贝奇"
+    },
+    {
+      "name_cn": "S0螺旋",
+      "name_en": "S0 Helix",
+      "size": "S0",
+      "grade": "A",
+      "optimal_range_m": 30,
+      "max_range_m": 30,
+      "mining_power": null,
+      "extraction_power": null,
+      "module_slots": 0,
+      "effects": {
+        "optimal_window": -40,
+        "charge_rate": 20
+      },
+      "purchase_locations": "18区 / 六角湾 / 列夫斯基 / 十L1 / 尼克斯星门 等21处"
+    }
+  ]
+}

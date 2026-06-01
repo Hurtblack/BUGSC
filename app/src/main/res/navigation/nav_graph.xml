@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/ToolsFragment">
+
+    <!-- 底部栏三个顶层落地页 -->
+    <fragment
+        android:id="@+id/ToolsFragment"
+        android:name="com.euedrc.bugsc.ToolsFragment"
+        android:label="工具"
+        tools:layout="@layout/fragment_tools" />
+
+    <fragment
+        android:id="@+id/QueryFragment"
+        android:name="com.euedrc.bugsc.QueryFragment"
+        android:label="查询"
+        tools:layout="@layout/fragment_query" />
+
+    <fragment
+        android:id="@+id/ProfileFragment"
+        android:name="com.euedrc.bugsc.ProfileFragment"
+        android:label="个人信息"
+        tools:layout="@layout/fragment_profile" />
+
+    <fragment
+        android:id="@+id/MiningFragment"
+        android:name="com.euedrc.bugsc.mining.MiningFragment"
+        android:label="矿物查询"
+        tools:layout="@layout/fragment_mining" />
+
+    <fragment
+        android:id="@+id/BugListFragment"
+        android:name="com.euedrc.bugsc.BugListFragment"
+        android:label="Bug 列表"
+        tools:layout="@layout/fragment_bug_list">
+
+        <action
+            android:id="@+id/action_BugListFragment_to_BugSubmitFragment"
+            app:destination="@id/BugSubmitFragment" />
+
+        <action
+            android:id="@+id/action_BugListFragment_to_BugDetailFragment"
+            app:destination="@id/BugDetailFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/BugDetailFragment"
+        android:name="com.euedrc.bugsc.BugDetailFragment"
+        android:label="Bug 详情"
+        tools:layout="@layout/fragment_bug_detail" />
+
+    <fragment
+        android:id="@+id/BugSubmitFragment"
+        android:name="com.euedrc.bugsc.BugSubmitFragment"
+        android:label="提交 Bug"
+        tools:layout="@layout/fragment_bug_submit">
+
+        <action
+            android:id="@+id/action_BugSubmitFragment_to_BugDetailFragment"
+            app:destination="@id/BugDetailFragment" />
+
+        <action
+            android:id="@+id/action_BugSubmitFragment_to_IssueCouncilFragment"
+            app:destination="@id/IssueCouncilFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/InventoryFragment"
+        android:name="com.euedrc.bugsc.InventoryFragment"
+        android:label="库存查看"
+        tools:layout="@layout/fragment_inventory" />
+
+    <fragment
+        android:id="@+id/HangarTimerFragment"
+        android:name="com.euedrc.bugsc.HangarTimerFragment"
+        android:label="灯状态计时辅助"
+        tools:layout="@layout/fragment_hangar_timer" />
+
+    <fragment
+        android:id="@+id/CharacterRepairFragment"
+        android:name="com.euedrc.bugsc.CharacterRepairFragment"
+        android:label="角色修复"
+        tools:layout="@layout/fragment_character_repair" />
+
+    <fragment
+        android:id="@+id/IssueCouncilFragment"
+        android:name="com.euedrc.bugsc.IssueCouncilFragment"
+        android:label="Issue Council"
+        tools:layout="@layout/fragment_issue_council" />
+
+    <fragment
+        android:id="@+id/BlueprintFragment"
+        android:name="com.euedrc.bugsc.blueprint.BlueprintFragment"
+        android:label="蓝图图鉴"
+        tools:layout="@layout/fragment_blueprint" />
+
+    <fragment
+        android:id="@+id/ShipFitFragment"
+        android:name="com.euedrc.bugsc.shipfit.ShipFitFragment"
+        android:label="飞船查找"
+        tools:layout="@layout/fragment_ship_fit">
+
+        <action
+            android:id="@+id/action_ShipFitFragment_to_ShipLoadoutFragment"
+            app:destination="@id/ShipLoadoutFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/ShipLoadoutFragment"
+        android:name="com.euedrc.bugsc.shipfit.ShipLoadoutFragment"
+        android:label="配装改装"
+        tools:layout="@layout/fragment_ship_loadout">
+
+        <argument
+            android:name="shipId"
+            app:argType="string"
+            android:defaultValue="" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/WikeloFragment"
+        android:name="com.euedrc.bugsc.wikelo.WikeloFragment"
+        android:label="维克洛兑换"
+        tools:layout="@layout/fragment_wikelo" />
+
+</navigation>

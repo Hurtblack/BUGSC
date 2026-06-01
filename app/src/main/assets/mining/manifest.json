@@ -1,0 +1,20 @@
+{
+  "_version": 11518367,
+  "fetchedAt": 1780288703,
+  "source": "https://sm.scmdb.net",
+  "gameVersion": "4.7.0",
+  "branch": "live",
+  "build": "11518367",
+  "files": [
+    {
+      "source": "mining_data-4.7.0-live.11518367.json",
+      "saved": "mining_data.json",
+      "bytes": 236181
+    },
+    {
+      "source": "mining_equipment-4.7.0-live.11518367.json",
+      "saved": "mining_equipment.json",
+      "bytes": 34645
+    }
+  ]
+}

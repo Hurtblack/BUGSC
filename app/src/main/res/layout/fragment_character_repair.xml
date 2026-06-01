@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hud_screen_bg"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/card_bg"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.18"
+            android:text="RSI // ACCOUNT RESET"
+            android:textColor="@color/sc_accent"
+            android:textSize="10sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:letterSpacing="0.08"
+            android:text="角色修复"
+            android:textColor="@color/sc_text"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_repair_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="准备打开 RSI 角色修复页..."
+            android:textColor="@color/sc_text_mid"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_repair_reload"
+                style="?android:attr/buttonStyle"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="2"
+                android:backgroundTint="@color/sc_accent"
+                android:text="重新打开"
+                android:textColor="@color/sc_ink"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_repair_back"
+                style="?android:attr/buttonStyle"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/sc_panel2"
+                android:text="后退"
+                android:textColor="@color/sc_text"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_repair_forward"
+                style="?android:attr/buttonStyle"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/sc_panel2"
+                android:text="前进"
+                android:textColor="@color/sc_text"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <WebView
+        android:id="@+id/web_repair"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:background="@color/sc_bg" />
+</LinearLayout>
