@@ -58,7 +58,7 @@ def _get(url):
 
 
 def fetch_ships():
-    d = _get(f"{BASE}/vehicles?is_spaceship=1")
+    d = _get(f"{BASE}/vehicles")
     raw = d.get("data") or []
     ships = []
     for s in raw:
