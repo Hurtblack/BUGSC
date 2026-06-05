@@ -98,6 +98,7 @@ class RsiInventoryClient(
         debugLines.clear()
         debug("开始拉取库存：token=${session.token.masked()} device=${session.device.masked()} auth=${session.accountAuth.masked()}")
         val items = mutableListOf<InventoryItem>()
+        val seenIds = mutableSetOf<String>()
         for (page in 1..maxPages) {
             val html = try {
                 getTextWithRetry("account/pledges?page=$page", page)
@@ -115,8 +116,15 @@ class RsiInventoryClient(
             }
             debug("第 $page 页解析到 ${pageItems.size} 项")
             if (pageItems.isEmpty()) break
-            items += pageItems
-            onPageFetched?.invoke(page, pageItems, items.toList())
+            // RSI 对超出范围的页码会重定向回第 1 页，导致重复返回相同内容。
+            // 用 seenIds 检测：若本页无任何新条目，说明已到末页，提前结束。
+            val newItems = pageItems.filter { seenIds.add(it.id) }
+            if (newItems.isEmpty()) {
+                debug("第 $page 页全部重复（RSI 重定向），停止拉取")
+                break
+            }
+            items += newItems
+            onPageFetched?.invoke(page, newItems, items.toList())
         }
         debug("库存拉取完成：共 ${items.size} 项")
         return items
