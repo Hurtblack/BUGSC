@@ -1,11 +1,10 @@
 # BUG公民
 
-Star Citizen 中文玩家工具箱，Android 应用。
+中文星际公民工具 App
 
 QQ群：330941212
 
-> **当前数据对应游戏版本：Alpha 4.8.0-LIVE.1825000**（2026-05-14 上线）
-> 下个补丁 4.8.1 预计 2026 年 6 月，届时请留意组件/飞船数据是否需要更新。
+> **当前数据对应游戏版本：Alpha 4.8.1**
 
 ---
 
@@ -18,6 +17,7 @@ QQ群：330941212
 | **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
 | **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exectimer.com） |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
+| **查询** | 任务搜索 | 4.8.1 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
 | **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算 |
 | **查询** | 维克洛兑换 | 4.8.0 | 巴努交易清单、兑换材料反查、声望需求 |
 | **查询** | 矿物查询 | 4.7.0 | 矿石分布、出现概率、稀有度、含量范围 |
@@ -77,7 +77,7 @@ app/src/main/
 
 | 文件 | 来源 | 内容 |
 |---|---|---|
-| `uex_shipfit_dataset.json` | UEX API | 飞船列表、可装配组件列表（628 条） |
+| `uex_shipfit_dataset.json` | UEX API | 全部载具列表（278 辆）、可装配组件列表（627 条） |
 | `erkul_ship_slots_live.json` | Erkul API | 每艘飞船的槽位配置（类型/尺寸限制） |
 | `zh_aliases.json` | 手工维护 | 组件/飞船中文名对照表 |
 | `component_power.json` | SC Wiki API（批量抓取） | 368 个组件的真实电量值 |
@@ -158,7 +158,7 @@ python3 tools/export_location_translations.py
 | `uex_shipfit_dataset.json` | 从 UEX API 2.0 拉取替换（组件/飞船列表） |
 | `erkul_ship_slots_live.json` | 从 Erkul 导出最新版本替换 |
 | `zh_aliases.json` | 手工维护 `ships` / `components` 两个 key |
-| `component_power.json` | 暂无独立脚本，按下方逻辑用临时脚本重建 |
+| `component_power.json` | `patch_component_power.py`（补全新增组件的 SC Wiki 功率数据） |
 
 **重建 `component_power.json`**（需 Python 3，联网）：
 1. 读取 `uex_shipfit_dataset.json` 中所有带 UUID 的组件
@@ -166,7 +166,7 @@ python3 tools/export_location_translations.py
 3. 发电机取 `power_plant.power_segment_generation`；其他组件取 `resource_network.usage.power.maximum`
 4. 输出 `{uex_id: {type, value}}` 写入 `component_power.json`
 
-> 当前覆盖：发电机 73 · 量子驱动 56 · 护盾 62 · 冷却器 68 · 武器 107，共 368 条；雷达无 UUID，按尺寸公式兜底。
+> 当前覆盖：发电机 74 · 量子驱动 56 · 护盾 62 · 冷却器 68 · 武器 128，共 388 条；雷达无 UUID，按尺寸公式兜底。
 
 ### 维克洛兑换
 
