@@ -25,6 +25,9 @@ class QueryFragment : Fragment() {
         binding.cardBlueprint.setOnClickListener {
             findNavController().navigate(R.id.BlueprintFragment)
         }
+        binding.cardMissionQuery.setOnClickListener {
+            findNavController().navigate(R.id.MissionQueryFragment)
+        }
         binding.cardShipfit.setOnClickListener {
             findNavController().navigate(R.id.ShipFitFragment)
         }

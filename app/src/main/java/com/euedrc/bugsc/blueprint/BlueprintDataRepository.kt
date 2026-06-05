@@ -29,6 +29,7 @@ class BlueprintDataRepository(private val context: Context) {
         SLOT_TRANSLATIONS("slot_translations.json", "slots"),
         BLUEPRINTS("scm_blueprint_hints.json", "blueprints"),
         MISSIONS("scm_blueprint_missions.json", "missions"),
+        SCMDB_MISSIONS("scmdb_missions.json", "missions"),
         SCCRAFT("sccraft_blueprints.json", "blueprints"),
         MISSION_TRANSLATIONS("mission_translations.json", "missions"),
         ITEM_STATS("item_base_stats.json", "stats");
@@ -89,21 +90,38 @@ class BlueprintDataRepository(private val context: Context) {
      * @return 任务列表；无数据返回空表。
      */
     fun loadAllMissions(): List<RewardMission> {
-        val root = bestJson(Dataset.MISSIONS)
-        val obj = root.optJSONObject("missions") ?: return emptyList()
-        val types = missionTypesOf(root)
+        cachedMissions?.let { return it }
+        val root = bestJson(Dataset.SCMDB_MISSIONS)
+        val obj = root.optJSONObject("missions") ?: JSONObject()
+        val linksRoot = bestJson(Dataset.MISSIONS)
+        val legacyObj = linksRoot.optJSONObject("missions")
+        val blueprintsByMission = blueprintsByMission(linksRoot)
         val result = ArrayList<RewardMission>(obj.length())
         for (guid in obj.keys()) {
-            obj.optJSONObject(guid)?.let { result += RewardMission.fromJson(guid, it, types) }
+            obj.optJSONObject(guid)?.let { result += RewardMission.fromJson(guid, it, blueprintsByMission[guid].orEmpty()) }
         }
+        if (legacyObj != null) {
+            for (guid in legacyObj.keys()) {
+                if (!obj.has(guid)) {
+                    legacyObj.optJSONObject(guid)?.let { result += RewardMission.fromJson(guid, it, blueprintsByMission[guid].orEmpty()) }
+                }
+            }
+        }
+        cachedMissions = result
         return result
     }
 
     /** 按 missionGuid 取单个任务详情;无则返回 null。 */
     fun loadMissionByGuid(guid: String): RewardMission? {
-        val root = bestJson(Dataset.MISSIONS)
-        val m = root.optJSONObject("missions")?.optJSONObject(guid) ?: return null
-        return RewardMission.fromJson(guid, m, missionTypesOf(root))
+        cachedMissions?.firstOrNull { it.guid == guid }?.let { return it }
+        val root = bestJson(Dataset.SCMDB_MISSIONS)
+        val linksRoot = bestJson(Dataset.MISSIONS)
+        val blueprints = blueprintsByMission(linksRoot)[guid].orEmpty()
+        root.optJSONObject("missions")?.optJSONObject(guid)?.let {
+            return RewardMission.fromJson(guid, it, blueprints)
+        }
+        val legacy = linksRoot.optJSONObject("missions")?.optJSONObject(guid) ?: return null
+        return RewardMission.fromJson(guid, legacy, blueprints)
     }
 
     /**
@@ -111,22 +129,36 @@ class BlueprintDataRepository(private val context: Context) {
      * 匹配键为蓝图英文名(blueprintName),与 sccraft 物品英文名一致(约 635/670 对齐)。
      */
     fun loadMissionsForBlueprint(nameEn: String): List<RewardMission> {
-        val root = bestJson(Dataset.MISSIONS)
-        val missionsObj = root.optJSONObject("missions") ?: return emptyList()
-        val guids = root.optJSONObject("blueprintMissions")?.optJSONArray(nameEn) ?: return emptyList()
-        val types = missionTypesOf(root)
+        val linksRoot = bestJson(Dataset.MISSIONS)
+        val missionRoot = bestJson(Dataset.SCMDB_MISSIONS)
+        val missionsObj = missionRoot.optJSONObject("missions") ?: JSONObject()
+        val guids = linksRoot.optJSONObject("blueprintMissions")?.optJSONArray(nameEn) ?: return emptyList()
+        val blueprintsByMission = blueprintsByMission(linksRoot)
         val result = ArrayList<RewardMission>(guids.length())
         for (i in 0 until guids.length()) {
             val guid = guids.optString(i)
-            missionsObj.optJSONObject(guid)?.let { result += RewardMission.fromJson(guid, it, types) }
+            val blueprints = blueprintsByMission[guid].orEmpty()
+            missionsObj.optJSONObject(guid)?.let {
+                result += RewardMission.fromJson(guid, it, blueprints)
+            } ?: linksRoot.optJSONObject("missions")?.optJSONObject(guid)?.let {
+                result += RewardMission.fromJson(guid, it, blueprints)
+            }
         }
         return result
     }
 
-    private fun missionTypesOf(root: JSONObject): Map<String, String> {
-        val obj = root.optJSONObject("missionTypes") ?: return emptyMap()
-        val map = HashMap<String, String>(obj.length())
-        for (k in obj.keys()) obj.optString(k).takeIf { it.isNotBlank() }?.let { map[k] = it }
+    private fun blueprintsByMission(root: JSONObject = bestJson(Dataset.MISSIONS)): Map<String, List<DroppedBlueprint>> {
+        val obj = root.optJSONObject("missions") ?: return emptyMap()
+        val map = HashMap<String, MutableList<DroppedBlueprint>>()
+        for (guid in obj.keys()) {
+            val arr = obj.optJSONObject(guid)?.optJSONArray("blueprints") ?: continue
+            for (i in 0 until arr.length()) {
+                val bp = arr.optJSONObject(i) ?: continue
+                val nameEn = bp.optString("nameEn").takeIf { it.isNotBlank() } ?: continue
+                val dropChance = if (bp.has("dropChance") && !bp.isNull("dropChance")) bp.optDouble("dropChance") else null
+                map.getOrPut(guid) { mutableListOf() } += DroppedBlueprint(nameEn, dropChance)
+            }
+        }
         return map
     }
 
@@ -232,16 +264,19 @@ class BlueprintDataRepository(private val context: Context) {
         if (!tmp.renameTo(target)) {
             target.writeText(text); tmp.delete()
         }
+        // 新数据落盘后让内存缓存失效，下次读取重新解析
+        jsonCache.remove(ds)
+        cachedMissions = null
         debug("${ds.fileName} 已更新到版本 $remoteVersion")
         return true
     }
 
     // ---- 内部:取「缓存 vs assets」中版本较高者 ----
 
-    private fun bestJson(ds: Dataset): JSONObject {
+    private fun bestJson(ds: Dataset): JSONObject = jsonCache.getOrPut(ds) {
         val cached = readCache(ds)
         val asset = readAsset(ds)
-        return when {
+        when {
             cached == null -> asset ?: JSONObject()
             asset == null -> cached
             versionOf(cached) >= versionOf(asset) -> cached
@@ -313,5 +348,18 @@ class BlueprintDataRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "BlueprintData"
+
+        /** 进程级缓存：已解析的数据集 JSON，避免重复读盘 + 重复解析大文件。 */
+        private val jsonCache = java.util.concurrent.ConcurrentHashMap<Dataset, JSONObject>()
+
+        /** 进程级缓存：全部任务列表（解析较重，列表/详情页共用）。 */
+        @Volatile
+        private var cachedMissions: List<RewardMission>? = null
+
+        /** 清空所有内存缓存（如需强制重读时调用）。 */
+        fun invalidateCaches() {
+            jsonCache.clear()
+            cachedMissions = null
+        }
     }
 }

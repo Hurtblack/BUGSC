@@ -19,6 +19,12 @@
         tools:layout="@layout/fragment_query" />
 
     <fragment
+        android:id="@+id/MissionQueryFragment"
+        android:name="com.euedrc.bugsc.MissionQueryFragment"
+        android:label="任务查询"
+        tools:layout="@layout/fragment_mission_query" />
+
+    <fragment
         android:id="@+id/ProfileFragment"
         android:name="com.euedrc.bugsc.ProfileFragment"
         android:label="个人信息"

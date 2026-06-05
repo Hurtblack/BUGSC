@@ -14,7 +14,7 @@
         android:layout_marginBottom="4dp"
         android:background="@color/sc_line2" />
 
-    <ScrollView
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:overScrollMode="never">
@@ -26,6 +26,6 @@
             android:orientation="vertical"
             android:padding="16dp" />
 
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>

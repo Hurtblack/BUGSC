@@ -315,10 +315,11 @@ class BlueprintFragment : Fragment() {
 
     private fun filterAndRenderMissions(query: String) {
         filteredMissions = allMissions.filter { m ->
-            query.isEmpty()
-                || m.displayTitle.lowercase().contains(query)
-                || m.title?.lowercase()?.contains(query) == true
-                || m.typeLabel?.lowercase()?.contains(query) == true
+            m.matchesMissionQuery(
+                query = query,
+                selectedSystem = "__all__",
+                selectedFaction = "__all__",
+            )
         }
         displayCount = PAGE_SIZE
         renderMissionList()
@@ -362,18 +363,22 @@ class BlueprintFragment : Fragment() {
             setTextColor(Color.parseColor("#d8eaf2"))
             typeface = Typeface.DEFAULT_BOLD
         })
-        val metaParts = buildList {
-            m.typeLabel?.let { add(it) }
-            if (m.isCombat) add("战斗")
-            m.rewardUec?.let { add("${java.text.NumberFormat.getInstance(java.util.Locale.US).format(it)} aUEC") }
-            if (m.blueprints.isNotEmpty()) add("蓝图×${m.blueprints.size}")
-        }
-        if (metaParts.isNotEmpty()) {
+        if (m.cardSecondaryLine.isNotBlank()) {
             card.addView(TextView(requireContext()).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply { topMargin = 6.dp }
-                text = metaParts.joinToString(" · ")
+                text = m.cardSecondaryLine
+                textSize = 11f
+                setTextColor(Color.parseColor("#7c95a8"))
+            })
+        }
+        if (m.cardTertiaryBadges.isNotEmpty()) {
+            card.addView(TextView(requireContext()).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = 6.dp }
+                text = m.cardTertiaryBadges.joinToString(" · ")
                 textSize = 11f
                 setTextColor(Color.parseColor("#21d4ff"))
             })

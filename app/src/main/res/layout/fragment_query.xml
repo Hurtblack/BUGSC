@@ -79,6 +79,54 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/card_mission_query"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/card_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:letterSpacing="0.08"
+                    android:text="任务查询"
+                    android:textColor="@color/sc_text"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/tag_bg"
+                    android:fontFamily="monospace"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="2dp"
+                    android:text="MISSION"
+                    android:textColor="@color/sc_accent"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="星系筛选 · 派系筛选 · 自由搜索"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/card_shipfit"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
