@@ -4,6 +4,19 @@
 
 QQ群：330941212
 
+---
+
+## 截图
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/screenshot_tools.jpg" width="200"/><br/>工具</td>
+    <td align="center"><img src="screenshots/screenshot_hangar.jpg" width="200"/><br/>灯状态计时辅助</td>
+    <td align="center"><img src="screenshots/screenshot_query.jpg" width="200"/><br/>查询</td>
+    <td align="center"><img src="screenshots/screenshot_profile.jpg" width="200"/><br/>个人信息</td>
+  </tr>
+</table>
+
 > **当前数据对应游戏版本：Alpha 4.8.1**
 
 ---
