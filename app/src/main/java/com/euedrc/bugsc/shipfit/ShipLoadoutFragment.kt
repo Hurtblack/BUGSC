@@ -96,6 +96,10 @@ class ShipLoadoutFragment : Fragment() {
         val cat = currentCategory ?: return
         categorySlots = ShipFitDisplay.slotsInCategory(cat, effectiveSlots())
         val slotLabels = categorySlots.map { ShipFitDisplay.slotLabel(it, categorySlots) }
+        val singleSlot = categorySlots.size == 1
+        val slotVisibility = if (singleSlot) View.GONE else View.VISIBLE
+        binding.tvStepSlot.visibility = slotVisibility
+        binding.spSlot.visibility = slotVisibility
         binding.spSlot.adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_dropdown_item,
