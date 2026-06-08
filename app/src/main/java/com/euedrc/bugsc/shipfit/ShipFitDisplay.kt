@@ -150,6 +150,41 @@ object ShipFitDisplay {
         return if (idx < CIRCLED.size) CIRCLED[idx] else "${idx + 1}"
     }
 
+    /** 顶级分类：排除采矿模组（已下沉到采矿头）。 */
+    fun topLevelCategories(slots: List<ShipSlot>): List<String> {
+        val cats = LinkedHashSet<String>()
+        slots.forEach { slot ->
+            if (isModuleChild(slot)) return@forEach
+            slot.types.mapNotNull { mapErkulTypeToUexType(it) }.forEach { t ->
+                if (t == "mining_module") return@forEach
+                cats += categoryLabel(t)
+            }
+        }
+        return cats.toList()
+    }
+
+    /** 取某分类下的槽位；采矿头分类把模组子槽位归到对应采矿头之后。 */
+    fun slotsInCategory(category: String, slots: List<ShipSlot>): List<ShipSlot> {
+        val matched = slots.filter { slot ->
+            if (isModuleChild(slot)) {
+                category == MINING_LASER_CATEGORY
+            } else {
+                slot.types.mapNotNull { mapErkulTypeToUexType(it) }
+                    .any { categoryLabel(it) == category }
+            }
+        }
+        if (category != MINING_LASER_CATEGORY) return matched
+        val heads = matched.filter { !isModuleChild(it) }
+        val modulesByParent = matched.filter { isModuleChild(it) }
+            .groupBy { it.key.substringBefore("/module_") }
+        return buildList {
+            heads.forEach { head ->
+                add(head)
+                addAll(modulesByParent[head.key].orEmpty())
+            }
+        }
+    }
+
     /** 槽位展示标签：类型 · 尺寸[· 方位/编号]；采矿模组子槽位缩进显示。 */
     fun slotLabel(slot: ShipSlot, categorySlots: List<ShipSlot>): String {
         if (isModuleChild(slot)) {

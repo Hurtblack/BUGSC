@@ -132,4 +132,32 @@ class ShipFitDisplayTest {
         val m = slot("hardpoint_mining_turret/module_2", null, null, "MiningModule")
         assertEquals("　模组 2 · 采矿模组", ShipFitDisplay.slotLabel(m, listOf(m)))
     }
+
+    @Test
+    fun topLevelCategories_excludesMiningModule() {
+        val slots = listOf(
+            slot("hardpoint_power_plant", 2, 2, "PowerPlant"),
+            slot("fallback_mining_laser", 1, 1, "UtilityTurret"),
+            slot("fallback_mining_laser/module_1", null, null, "MiningModule"),
+        )
+        val cats = ShipFitDisplay.topLevelCategories(slots)
+        assertTrue(cats.contains("电源"))
+        assertTrue(cats.contains("采矿头"))
+        assertFalse(cats.contains("采矿模组"))
+    }
+
+    @Test
+    fun slotsInCategory_nestsModulesUnderMiningHead() {
+        val head = slot("fallback_mining_laser", 1, 1, "UtilityTurret")
+        val m1 = slot("fallback_mining_laser/module_1", null, null, "MiningModule")
+        val m2 = slot("fallback_mining_laser/module_2", null, null, "MiningModule")
+        val pp = slot("hardpoint_power_plant", 2, 2, "PowerPlant")
+        val all = listOf(pp, head, m1, m2)
+
+        val mining = ShipFitDisplay.slotsInCategory("采矿头", all)
+        assertEquals(listOf(head, m1, m2), mining)
+
+        val power = ShipFitDisplay.slotsInCategory("电源", all)
+        assertEquals(listOf(pp), power)
+    }
 }
