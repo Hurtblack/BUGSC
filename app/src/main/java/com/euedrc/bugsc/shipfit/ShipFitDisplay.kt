@@ -126,4 +126,41 @@ object ShipFitDisplay {
             .mapNotNull { decomposeToken(it.lowercase()) }
         return parts.joinToString("").ifEmpty { null }
     }
+
+    private val CIRCLED = listOf("①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩")
+
+    private fun typeLabelOf(slot: ShipSlot): String =
+        slot.types.mapNotNull { mapErkulTypeToUexType(it) }
+            .distinct()
+            .joinToString("/") { categoryLabel(it) }
+
+    private fun groupKeyOf(slot: ShipSlot): String =
+        typeLabelOf(slot) + "|" + (formatSize(slot.minSize, slot.maxSize) ?: "")
+
+    private fun isModuleChild(slot: ShipSlot): Boolean = slot.key.contains("/module_")
+
+    /** 同分类内按 (类型,尺寸) 分组决定后缀：单个→无；多个且方位全可解析→方位；否则→编号。 */
+    private fun suffixFor(slot: ShipSlot, categorySlots: List<ShipSlot>): String? {
+        val group = categorySlots.filter { !isModuleChild(it) && groupKeyOf(it) == groupKeyOf(slot) }
+        if (group.size <= 1) return null
+        val positions = group.map { positionLabel(it.key) }
+        val allDistinctPositions = positions.none { it == null } && positions.toSet().size == positions.size
+        if (allDistinctPositions) return positionLabel(slot.key)
+        val idx = group.indexOf(slot).coerceAtLeast(0)
+        return if (idx < CIRCLED.size) CIRCLED[idx] else "${idx + 1}"
+    }
+
+    /** 槽位展示标签：类型 · 尺寸[· 方位/编号]；采矿模组子槽位缩进显示。 */
+    fun slotLabel(slot: ShipSlot, categorySlots: List<ShipSlot>): String {
+        if (isModuleChild(slot)) {
+            val moduleNo = slot.key.substringAfter("/module_").toIntOrNull() ?: 1
+            return "　模组 $moduleNo · ${categoryLabel("mining_module")}"
+        }
+        val base = listOfNotNull(
+            typeLabelOf(slot).ifBlank { null },
+            formatSize(slot.minSize, slot.maxSize),
+        ).joinToString(" · ")
+        val suffix = suffixFor(slot, categorySlots)
+        return if (suffix != null) "$base · $suffix" else base
+    }
 }

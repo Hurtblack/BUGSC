@@ -82,4 +82,54 @@ class ShipFitDisplayTest {
         assertNull(ShipFitDisplay.positionLabel("fallback_shield_1"))
         assertNull(ShipFitDisplay.positionLabel("wiki_PowerPlant_0"))
     }
+
+    private fun slot(key: String, min: Int?, max: Int?, vararg types: String) =
+        ShipSlot(key = key, minSize = min, maxSize = max, types = types.toList())
+
+    @Test
+    fun slotLabel_singleSlotNoSuffix() {
+        val s = slot("hardpoint_cooler", 2, 2, "Cooler")
+        assertEquals("冷却 · S2", ShipFitDisplay.slotLabel(s, listOf(s)))
+    }
+
+    @Test
+    fun slotLabel_collapsesSizeAndDropsRawKey() {
+        val s = slot("hardpoint_quantum_drive", 1, 1, "QuantumDrive")
+        assertEquals("量子 · S1", ShipFitDisplay.slotLabel(s, listOf(s)))
+    }
+
+    @Test
+    fun slotLabel_usesPositionWhenAllDistinct() {
+        val left = slot("fallback_power_plant_left", 2, 2, "PowerPlant")
+        val right = slot("fallback_power_plant_right", 2, 2, "PowerPlant")
+        val all = listOf(left, right)
+        assertEquals("电源 · S2 · 左", ShipFitDisplay.slotLabel(left, all))
+        assertEquals("电源 · S2 · 右", ShipFitDisplay.slotLabel(right, all))
+    }
+
+    @Test
+    fun slotLabel_numbersWhenPositionUnavailable() {
+        val a = slot("fallback_shield_1", 2, 2, "Shield")
+        val b = slot("fallback_shield_2", 2, 2, "Shield")
+        val c = slot("fallback_shield_3", 2, 2, "Shield")
+        val all = listOf(a, b, c)
+        assertEquals("护盾 · S2 · ①", ShipFitDisplay.slotLabel(a, all))
+        assertEquals("护盾 · S2 · ②", ShipFitDisplay.slotLabel(b, all))
+        assertEquals("护盾 · S2 · ③", ShipFitDisplay.slotLabel(c, all))
+    }
+
+    @Test
+    fun slotLabel_numbersWhenSomePositionMissing() {
+        val cockpit = slot("hardpoint_cockpit_radar", 1, 1, "Radar")
+        val plain = slot("hardpoint_radar", 1, 1, "Radar")
+        val all = listOf(cockpit, plain)
+        assertEquals("雷达 · S1 · ①", ShipFitDisplay.slotLabel(cockpit, all))
+        assertEquals("雷达 · S1 · ②", ShipFitDisplay.slotLabel(plain, all))
+    }
+
+    @Test
+    fun slotLabel_moduleChildIndented() {
+        val m = slot("hardpoint_mining_turret/module_2", null, null, "MiningModule")
+        assertEquals("　模组 2 · 采矿模组", ShipFitDisplay.slotLabel(m, listOf(m)))
+    }
 }
