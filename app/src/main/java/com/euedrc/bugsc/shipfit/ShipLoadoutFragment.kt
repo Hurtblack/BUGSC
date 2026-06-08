@@ -59,7 +59,7 @@ class ShipLoadoutFragment : Fragment() {
         binding.powerGrid.setOnAllocationChanged { allocations ->
             val summary = lastPowerSummary ?: return@setOnAllocationChanged
             binding.tvPowerGroups.text = summary.groups.mapIndexed { index, group ->
-                "${powerGroupLabel(group.first)} ${allocations.getOrNull(index) ?: 0}/${group.second}"
+                "${ShipFitDisplay.powerGroupLabel(group.first)} ${allocations.getOrNull(index) ?: 0}/${group.second}"
             }.joinToString(" | ")
         }
         binding.btnAddSlot.setOnClickListener { addSlotConfig() }
@@ -73,7 +73,7 @@ class ShipLoadoutFragment : Fragment() {
     private fun refreshSlots() {
         val selectedCategory = currentCategory
         val allSlots = effectiveSlots()
-        categories = buildCategories(allSlots)
+        categories = ShipFitDisplay.topLevelCategories(allSlots)
         binding.spCategory.adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_dropdown_item,
@@ -94,11 +94,8 @@ class ShipLoadoutFragment : Fragment() {
 
     private fun refreshSlotsByCategory() {
         val cat = currentCategory ?: return
-        categorySlots = effectiveSlots().filter { slot ->
-            val accepted = slot.types.mapNotNull { mapErkulTypeToUexType(it) }
-            accepted.any { categoryLabel(it) == cat }
-        }
-        val slotLabels = categorySlots.map { slotLabel(it) }
+        categorySlots = ShipFitDisplay.slotsInCategory(cat, effectiveSlots())
+        val slotLabels = categorySlots.map { ShipFitDisplay.slotLabel(it, categorySlots) }
         binding.spSlot.adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_dropdown_item,
@@ -110,11 +107,11 @@ class ShipLoadoutFragment : Fragment() {
 
     private fun refreshComponents() {
         val slot = currentSlot ?: return
-        val acceptedTypes = slot.types.mapNotNull { mapErkulTypeToUexType(it) }.toSet()
+        val acceptedTypes = slot.types.mapNotNull { ShipFitDisplay.mapErkulTypeToUexType(it) }.toSet()
         filteredComponents = components.filter { c ->
-            c.type in acceptedTypes && isSizeCompatible(slot, c)
+            c.type in acceptedTypes && ShipFitDisplay.isSizeCompatible(slot.minSize, slot.maxSize, c.size)
         }.sortedWith(compareBy<FitComponent> { componentSortName(it) }.thenBy { it.name.lowercase() })
-        val labels = filteredComponents.map { "${componentDisplayName(it)} [${categoryLabel(it.type)}] S${it.size ?: "?"}" }
+        val labels = filteredComponents.map { "${componentDisplayName(it)} [${ShipFitDisplay.categoryLabel(it.type)}] S${it.size ?: "?"}" }
         binding.spComponent.adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_dropdown_item,
@@ -128,9 +125,9 @@ class ShipLoadoutFragment : Fragment() {
         val byType = components.groupBy { it.type }
         currentSlots.forEach { slot ->
             val candidates = slot.types
-                .mapNotNull { mapErkulTypeToUexType(it) }
+                .mapNotNull { ShipFitDisplay.mapErkulTypeToUexType(it) }
                 .distinct()
-                .flatMap { t -> byType[t].orEmpty().filter { isSizeCompatible(slot, it) } }
+                .flatMap { t -> byType[t].orEmpty().filter { ShipFitDisplay.isSizeCompatible(slot.minSize, slot.maxSize, it.size) } }
                 .distinctBy { it.id }
                 .sortedWith(compareBy<FitComponent> { it.size ?: 999 }.thenBy { it.name.lowercase() })
             val best = candidates.firstOrNull()
@@ -223,7 +220,7 @@ class ShipLoadoutFragment : Fragment() {
         binding.tvPowerRatio.text = "总耗电 ${p.ratio}% · 已占 ${p.usedSegments} 格"
         lastPowerSummary = p
         binding.powerGrid.setSummary(p)
-        binding.tvPowerGroups.text = p.groups.joinToString(" | ") { "${powerGroupLabel(it.first)} 需求${it.second}" }
+        binding.tvPowerGroups.text = p.groups.joinToString(" | ") { "${ShipFitDisplay.powerGroupLabel(it.first)} 需求${it.second}" }
         renderSlotSummary(slotsMap)
     }
 
@@ -238,7 +235,7 @@ class ShipLoadoutFragment : Fragment() {
             slotsMap.forEach { (slotKey, componentId) ->
                 val slot = allSlotsByKey[slotKey]
                 val component = componentsById[componentId]
-                val label = slot?.let { slotLabel(it) } ?: slotKey
+                val label = slot?.let { ShipFitDisplay.slotLabel(it, effectiveSlots()) } ?: slotKey
                 val name = component?.let { componentDisplayName(it) } ?: componentId
                 append(label).append(" = ").append(name).append('\n')
             }
@@ -305,36 +302,6 @@ class ShipLoadoutFragment : Fragment() {
         return map
     }
 
-    private fun buildCategories(slots: List<ShipSlot>): List<String> {
-        val cats = linkedSetOf<String>()
-        slots.forEach { s ->
-            s.types.mapNotNull { mapErkulTypeToUexType(it) }.forEach { cats += categoryLabel(it) }
-        }
-        return cats.toList()
-    }
-
-    private fun slotLabel(slot: ShipSlot): String {
-        val types = slot.types.mapNotNull { mapErkulTypeToUexType(it) }.distinct().joinToString("/") { categoryLabel(it) }
-        val size = when {
-            slot.minSize != null && slot.maxSize != null -> "S${slot.minSize}-S${slot.maxSize}"
-            slot.minSize != null -> "S${slot.minSize}"
-            slot.maxSize != null -> "S${slot.maxSize}"
-            else -> "S?"
-        }
-        if (slot.key.contains("/module_")) {
-            val selected = parseSlots(binding.etSlots.text?.toString().orEmpty())
-            val parentKey = slot.key.substringBefore("/module_")
-            val moduleNo = slot.key.substringAfter("/module_").toIntOrNull() ?: 1
-            val parentName = selected[parentKey]
-                ?.let { componentsById[it] }
-                ?.let { componentDisplayName(it) }
-                ?: parentKey.removePrefix("fallback_")
-            return "    模组 $moduleNo · $types · 来自 $parentName"
-        }
-        val key = if (slot.key.startsWith("fallback_")) slot.key.removePrefix("fallback_") else slot.key
-        return "$types · $size · $key"
-    }
-
     private fun componentDisplayName(c: FitComponent): String {
         val zh = c.zhName?.trim().orEmpty()
         return if (zh.isBlank()) c.name else "$zh (${c.name})"
@@ -342,60 +309,6 @@ class ShipLoadoutFragment : Fragment() {
 
     private fun componentSortName(c: FitComponent): String =
         c.zhName?.trim()?.takeIf { it.isNotBlank() } ?: c.name
-
-    private fun categoryLabel(type: String): String = when (type) {
-        "power_plant" -> "电源"
-        "cooler" -> "冷却"
-        "shield_generator" -> "护盾"
-        "quantum_drive" -> "量子"
-        "radar" -> "雷达"
-        "weapon_gun" -> "武器"
-        "missile_rack" -> "导弹"
-        "missile" -> "导弹弹体"
-        "turret" -> "炮塔"
-        "mining_laser" -> "采矿头"
-        "mining_module" -> "采矿模组"
-        else -> type
-    }
-
-    private fun powerGroupLabel(code: String): String = when (code) {
-        "WPN" -> "武器"
-        "SHD" -> "护盾"
-        "QTM" -> "量子"
-        "RDR" -> "雷达"
-        "COOL" -> "冷却"
-        else -> code
-    }
-
-    private fun mapErkulTypeToUexType(t: String): String? = when (t) {
-        "PowerPlant" -> "power_plant"
-        "Cooler" -> "cooler"
-        "Shield" -> "shield_generator"
-        "QuantumDrive" -> "quantum_drive"
-        "Radar" -> "radar"
-        "WeaponGun" -> "weapon_gun"
-        "MissileRack" -> "missile_rack"
-        "MissileLauncher" -> "missile_rack"
-        "Missile" -> "missile"
-        "Turret" -> "turret"
-        "UtilityTurret" -> "mining_laser"
-        "ToolArm" -> "mining_laser"
-        "MiningModule" -> "mining_module"
-        "WeaponDefensive" -> "missile_rack"
-        else -> null
-    }
-
-    private fun isSizeCompatible(slot: ShipSlot, c: FitComponent): Boolean {
-        val size = c.size ?: return true
-        val min = slot.minSize
-        val max = slot.maxSize
-        return when {
-            min != null && max != null -> size in min..max
-            min != null -> size >= min
-            max != null -> size <= max
-            else -> true
-        }
-    }
 
     private fun toast(msg: String) {
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
