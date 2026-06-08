@@ -115,6 +115,7 @@ class ShipFitDataRepository(private val context: Context) {
             val type = c.optString("type")
             val size = c.optInt("size").takeIf { it > 0 }
             if (id.isBlank() || name.isBlank() || type.isBlank()) continue
+            if (!ShipFitDisplay.isSelectableComponent(c.optString("vehicle_name"))) continue
             list += FitComponent(
                 id = id,
                 name = name,
