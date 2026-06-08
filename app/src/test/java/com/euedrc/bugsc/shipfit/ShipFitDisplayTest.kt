@@ -60,4 +60,26 @@ class ShipFitDisplayTest {
         assertTrue(ShipFitDisplay.isSizeCompatible(null, null, 1))
         assertFalse(ShipFitDisplay.isSizeCompatible(null, null, 4))
     }
+
+    @Test
+    fun positionLabel_translatesDirections() {
+        assertEquals("左", ShipFitDisplay.positionLabel("hardpoint_shield_generator_left"))
+        assertEquals("右", ShipFitDisplay.positionLabel("hardpoint_power_plant_right"))
+        assertEquals("前左", ShipFitDisplay.positionLabel("hardpoint_weapon_frontleft"))
+        assertEquals("后右", ShipFitDisplay.positionLabel("hardpoint_weapon_rearright"))
+    }
+
+    @Test
+    fun positionLabel_translatesDescriptors() {
+        assertEquals("座舱", ShipFitDisplay.positionLabel("hardpoint_cockpit_radar"))
+        assertEquals("主", ShipFitDisplay.positionLabel("hardpoint_main_radar"))
+    }
+
+    @Test
+    fun positionLabel_nullWhenNoPositionToken() {
+        assertNull(ShipFitDisplay.positionLabel("hardpoint_cooler"))
+        assertNull(ShipFitDisplay.positionLabel("hardpoint_radar"))
+        assertNull(ShipFitDisplay.positionLabel("fallback_shield_1"))
+        assertNull(ShipFitDisplay.positionLabel("wiki_PowerPlant_0"))
+    }
 }

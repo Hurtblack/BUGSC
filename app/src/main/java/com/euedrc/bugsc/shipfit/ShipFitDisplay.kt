@@ -76,4 +76,54 @@ object ShipFitDisplay {
             else -> true
         }
     }
+
+    // ---- 方位/描述词词典 ----
+    // 顺序：长词在前，避免被短词截断（如 cockpit 先于无关项；upper/lower 整词匹配）。
+    private val POSITION_DICT: List<Pair<String, String>> = listOf(
+        "cockpit" to "座舱",
+        "remote" to "遥控",
+        "center" to "中",
+        "centre" to "中",
+        "bottom" to "下",
+        "upper" to "上",
+        "lower" to "下",
+        "front" to "前",
+        "right" to "右",
+        "rear" to "后",
+        "back" to "后",
+        "left" to "左",
+        "main" to "主",
+        "nose" to "前",
+        "top" to "上",
+        "mid" to "中",
+    ).sortedByDescending { it.first.length }
+
+    /** 把单个 token 贪心拆成方位/描述词的中文拼接；无法整体拆解则返回 null。 */
+    private fun decomposeToken(token: String): String? {
+        var rest = token
+        val sb = StringBuilder()
+        outer@ while (rest.isNotEmpty()) {
+            for ((en, zh) in POSITION_DICT) {
+                if (rest.startsWith(en)) {
+                    sb.append(zh)
+                    rest = rest.substring(en.length)
+                    continue@outer
+                }
+            }
+            return null // 出现非词典字符，整体判定为非方位 token
+        }
+        return sb.toString().ifEmpty { null }
+    }
+
+    /** 从槽位 key 解析可读方位/描述词；解析不出返回 null（交由编号兜底）。 */
+    fun positionLabel(key: String): String? {
+        var k = key
+        listOf("hardpoint_", "fallback_", "wiki_").forEach { p ->
+            if (k.startsWith(p)) k = k.removePrefix(p)
+        }
+        val parts = k.split('_', '-')
+            .filter { it.isNotBlank() }
+            .mapNotNull { decomposeToken(it.lowercase()) }
+        return parts.joinToString("").ifEmpty { null }
+    }
 }
