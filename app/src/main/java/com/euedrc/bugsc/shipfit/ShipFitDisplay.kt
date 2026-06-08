@@ -53,7 +53,9 @@ object ShipFitDisplay {
     val MINING_LASER_CATEGORY: String = categoryLabel("mining_laser")
 
     // ---- A：组件可选性（排除整船独有焊死件）----
-    fun isSelectableComponent(vehicleName: String?): Boolean = vehicleName.isNullOrBlank()
+    // 防御：Android org.json 的 optString 可能把 JSON null 返回成字符串 "null"，一并视为空。
+    fun isSelectableComponent(vehicleName: String?): Boolean =
+        vehicleName.isNullOrBlank() || vehicleName.equals("null", ignoreCase = true)
 
     // ---- 尺寸 ----
     fun formatSize(min: Int?, max: Int?): String? = when {

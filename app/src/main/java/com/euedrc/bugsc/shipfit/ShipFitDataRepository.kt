@@ -114,8 +114,11 @@ class ShipFitDataRepository(private val context: Context) {
             val name = c.optString("name")
             val type = c.optString("type")
             val size = c.optInt("size").takeIf { it > 0 }
+            // 注意：Android 自带 org.json 的 optString 遇到 JSON null 会返回字符串 "null"，
+            // 必须用 isNull 判定，否则整船独有件过滤会把 vehicle_name 为 null 的组件全部误杀。
+            val vehicleName = if (c.isNull("vehicle_name")) null else c.optString("vehicle_name")
             if (id.isBlank() || name.isBlank() || type.isBlank()) continue
-            if (!ShipFitDisplay.isSelectableComponent(c.optString("vehicle_name"))) continue
+            if (!ShipFitDisplay.isSelectableComponent(vehicleName)) continue
             list += FitComponent(
                 id = id,
                 name = name,

@@ -28,6 +28,9 @@ class ShipFitDisplayTest {
         assertTrue(ShipFitDisplay.isSelectableComponent(null))
         assertTrue(ShipFitDisplay.isSelectableComponent(""))
         assertTrue(ShipFitDisplay.isSelectableComponent("   "))
+        // Android org.json 把 JSON null 的 optString 返回成字符串 "null"，应一并视为可选
+        assertTrue(ShipFitDisplay.isSelectableComponent("null"))
+        assertTrue(ShipFitDisplay.isSelectableComponent("NULL"))
         assertFalse(ShipFitDisplay.isSelectableComponent("Reclaimer"))
     }
 
