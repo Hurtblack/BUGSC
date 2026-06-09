@@ -29,6 +29,9 @@ class ToolsFragment : Fragment() {
         binding.cardTimer.setOnClickListener {
             findNavController().navigate(R.id.HangarTimerFragment)
         }
+        binding.cardWb.setOnClickListener {
+            findNavController().navigate(R.id.WbFragment)
+        }
         binding.cardComing.setOnClickListener {
             Toast.makeText(requireContext(), "陆续开发中", Toast.LENGTH_SHORT).show()
         }

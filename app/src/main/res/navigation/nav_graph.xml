@@ -131,4 +131,10 @@
         android:label="维克洛兑换"
         tools:layout="@layout/fragment_wikelo" />
 
+    <fragment
+        android:id="@+id/WbFragment"
+        android:name="com.euedrc.bugsc.wb.WbFragment"
+        android:label="每日 WB"
+        tools:layout="@layout/fragment_wb" />
+
 </navigation>

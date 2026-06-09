@@ -1,0 +1,42 @@
+name: 每日 WB 数据刷新
+
+# 抓 RSI 官网 warbond 限时折扣船，产出 wb/daily_wb.json 并 commit 回仓库。
+# app 端匿名拉 raw.githubusercontent.com/Hurtblack/BUGSC/main/wb/daily_wb.json。
+# 脚本拒绝写出空数据（拿不到 token / 0 条 warbond 即非零退出），失败时不覆盖旧文件，CI 报红告警。
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # 每 6 小时（UTC）
+  workflow_dispatch: {}       # 支持手动触发
+
+permissions:
+  contents: write             # 用默认 GITHUB_TOKEN commit 回仓库
+
+concurrency:
+  group: daily-wb
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: 抓取并生成 daily_wb.json
+        run: python3 tools/export_daily_wb.py -o wb/daily_wb.json
+
+      - name: 提交变更（仅当有 diff）
+        run: |
+          if git diff --quiet -- wb/daily_wb.json; then
+            echo "数据无变化，跳过提交"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add wb/daily_wb.json
+          git commit -m "[ci] 刷新每日 WB 数据"
+          git push
