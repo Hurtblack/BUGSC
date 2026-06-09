@@ -29,6 +29,11 @@ class ShipLoadoutFragment : Fragment() {
     private var componentsById: Map<String, FitComponent> = emptyMap()
     private var lastPowerSummary: PowerSummary? = null
 
+    // 每艘船记住上次配置：key=船id，value=配船码（ShipFitCodec 编码）。
+    private val loadoutPrefs by lazy {
+        requireContext().getSharedPreferences("shipfit_loadouts", Context.MODE_PRIVATE)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -54,7 +59,8 @@ class ShipLoadoutFragment : Fragment() {
         binding.tvShipName.text = ship.zhName?.let { "$it (${ship.name})" } ?: ship.name
         currentSlots = ship.slots
         refreshSlots()
-        applyDefaultTemplate()
+        // 优先恢复这艘船上次保存的配置；没有存档（或存档已失效）才套默认模板。
+        if (!restoreSavedConfig()) applyDefaultTemplate()
 
         binding.powerGrid.setOnAllocationChanged { allocations ->
             val summary = lastPowerSummary ?: return@setOnAllocationChanged
@@ -142,6 +148,37 @@ class ShipLoadoutFragment : Fragment() {
         renderSlotSummary(map)
         refreshSlots()
         binding.tvResult.text = "已加载默认模板：${ship.name}（${map.size} 个槽位）"
+        saveCurrentConfig()
+    }
+
+    /** 把 et_slots 当前配置编码成配船码存入 SharedPreferences；空配置则清除存档。 */
+    private fun saveCurrentConfig() {
+        val ship = currentShip?.id ?: return
+        val slots = parseSlots(binding.etSlots.text?.toString().orEmpty())
+        if (slots.isEmpty()) {
+            loadoutPrefs.edit().remove(ship).apply()
+            return
+        }
+        val code = ShipFitCodec.encode(ShipFitPayload(ship = ship, slots = slots))
+        loadoutPrefs.edit().putString(ship, code).apply()
+    }
+
+    /** 恢复这艘船上次保存的配置；过滤掉数据换版后已失效的组件。无有效存档返回 false。 */
+    private fun restoreSavedConfig(): Boolean {
+        val ship = currentShip?.id ?: return false
+        val code = loadoutPrefs.getString(ship, null) ?: return false
+        val payload = (ShipFitCodec.decode(code) as? DecodeResult.Success)?.payload ?: return false
+        val valid = LinkedHashMap<String, String>()
+        payload.slots.forEach { (slotKey, componentId) ->
+            if (componentsById.containsKey(componentId)) valid[slotKey] = componentId
+        }
+        if (valid.isEmpty()) return false
+        binding.etSlots.setText(valid.entries.joinToString("\n") { "${it.key}=${it.value}" })
+        updatePowerPanel(valid)
+        renderSlotSummary(valid)
+        refreshSlots()
+        binding.tvResult.text = "已恢复上次配置（${valid.size} 个槽位）"
+        return true
     }
 
     private fun addSlotConfig() {
@@ -158,6 +195,7 @@ class ShipLoadoutFragment : Fragment() {
         updatePowerPanel(map)
         renderSlotSummary(map)
         if (comp.type == "mining_laser") refreshSlots()
+        saveCurrentConfig()
     }
 
     private fun generateCode() {
@@ -185,6 +223,7 @@ class ShipLoadoutFragment : Fragment() {
                 binding.tvResult.text = "解析成功：${result.payload.ship}，${result.payload.slots.size} 个槽位"
                 updatePowerPanel(result.payload.slots)
                 renderSlotSummary(result.payload.slots)
+                saveCurrentConfig()
             }
             is DecodeResult.Error -> {
                 binding.tvResult.text = "解析失败 [${result.code}] ${result.message}"
