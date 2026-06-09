@@ -34,6 +34,12 @@ data class RsiUserProfile(
     val avatarUrl: String = ""
 )
 
+data class InventoryRequestState(
+    val page: Int,
+    val attempt: Int,
+    val maxAttempts: Int
+)
+
 enum class InventoryErrorType {
     HTTP,
     TIMEOUT,
@@ -50,6 +56,10 @@ class InventoryFetchException(
 class RsiInventoryClient(
     private var session: RsiSession = RsiSession()
 ) {
+    internal data class PaginationInfo(
+        val maxLinkedPage: Int? = null
+    )
+
     private val debugLines = mutableListOf<String>()
     private var csrfToken: String = ""
 
@@ -92,7 +102,8 @@ class RsiInventoryClient(
 
     fun fetchInventory(
         maxPages: Int = 30,
-        onPageFetched: ((page: Int, pageItems: List<InventoryItem>, allItems: List<InventoryItem>) -> Unit)? = null
+        onPageFetched: ((page: Int, pageItems: List<InventoryItem>, allItems: List<InventoryItem>) -> Unit)? = null,
+        onRequestStateChanged: ((InventoryRequestState) -> Unit)? = null
     ): List<InventoryItem> {
         if (!session.isLoggedIn) throw IllegalStateException("请先登录")
         debugLines.clear()
@@ -101,12 +112,13 @@ class RsiInventoryClient(
         val seenIds = mutableSetOf<String>()
         for (page in 1..maxPages) {
             val html = try {
-                getTextWithRetry("account/pledges?page=$page", page)
+                getTextWithRetry("account/pledges?page=$page", page, onRequestStateChanged)
             } catch (e: InventoryFetchException) {
                 debug("第 $page 页请求失败：${e.message}")
                 throw e
             }
             debugPage(page, html)
+            val paginationInfo = extractPaginationInfo(html)
             val pageItems = try {
                 InventoryParser.parseHangarItems(html, page)
             } catch (e: InventoryParseException) {
@@ -125,6 +137,11 @@ class RsiInventoryClient(
             }
             items += newItems
             onPageFetched?.invoke(page, newItems, items.toList())
+            val maxLinkedPage = paginationInfo.maxLinkedPage
+            if (maxLinkedPage != null && page >= maxLinkedPage) {
+                debug("第 $page 页已达到分页上限 $maxLinkedPage，停止拉取")
+                break
+            }
         }
         debug("库存拉取完成：共 ${items.size} 项")
         return items
@@ -215,8 +232,8 @@ class RsiInventoryClient(
 
     private fun openConnection(endpoint: String): HttpURLConnection {
         val conn = URL("$BASE_URL$endpoint").openConnection() as HttpURLConnection
-        conn.connectTimeout = 20_000
-        conn.readTimeout = 20_000
+        conn.connectTimeout = REQUEST_TIMEOUT_MS.toInt()
+        conn.readTimeout = REQUEST_TIMEOUT_MS.toInt()
         conn.instanceFollowRedirects = true
         conn.setRequestProperty("Accept", "application/json, text/html, */*")
         conn.setRequestProperty("User-Agent", USER_AGENT)
@@ -281,7 +298,11 @@ class RsiInventoryClient(
         return body
     }
 
-    private fun getTextWithRetry(endpoint: String, page: Int): String {
+    private fun getTextWithRetry(
+        endpoint: String,
+        page: Int,
+        onRequestStateChanged: ((InventoryRequestState) -> Unit)? = null
+    ): String {
         var lastError: Exception? = null
         repeat(PLEDGE_FETCH_RETRY) { attempt ->
             val attemptIndex = attempt + 1
@@ -289,6 +310,13 @@ class RsiInventoryClient(
                 if (attemptIndex > 1) {
                     debug("第 $page 页重试中：第 $attemptIndex/$PLEDGE_FETCH_RETRY 次")
                 }
+                onRequestStateChanged?.invoke(
+                    InventoryRequestState(
+                        page = page,
+                        attempt = attemptIndex,
+                        maxAttempts = PLEDGE_FETCH_RETRY
+                    )
+                )
                 return getText(endpoint)
             } catch (e: SocketTimeoutException) {
                 lastError = InventoryFetchException(
@@ -395,6 +423,16 @@ class RsiInventoryClient(
         Log.d(TAG, message)
     }
 
+    internal fun extractPaginationInfo(html: String): PaginationInfo {
+        val linkedPages = Regex("""account/pledges\?page=(\d+)""", RegexOption.IGNORE_CASE)
+            .findAll(html)
+            .mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }
+            .toList()
+        return PaginationInfo(
+            maxLinkedPage = linkedPages.maxOrNull()
+        )
+    }
+
     private fun String.masked(): String {
         if (isBlank()) return "-"
         return if (length <= 8) "***" else "${take(4)}...${takeLast(4)}"
@@ -421,6 +459,7 @@ class RsiInventoryClient(
         private const val BASE_URL = "https://robertsspaceindustries.com/"
         private const val PLEDGE_FETCH_RETRY = 3
         private const val PLEDGE_RETRY_DELAY_MS = 1500L
+        const val REQUEST_TIMEOUT_MS = 20_000L
         private const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
         private const val ACCOUNT_QUERY = """query account {

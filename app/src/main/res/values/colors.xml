@@ -12,14 +12,18 @@
     <color name="sc_line2">#2A4862</color>
     <color name="sc_accent">#21D4FF</color>
     <color name="sc_accent_dim">#16A3C7</color>
+    <color name="sc_accent_pressed">#12B9E3</color>
     <color name="sc_accent_ink">#1F21D4FF</color>
     <color name="sc_warn">#FF8A3D</color>
     <color name="sc_danger">#FF4565</color>
     <color name="sc_ok">#4ADE80</color>
+    <color name="sc_ok_pressed">#36C96B</color>
     <color name="sc_text">#D8EAF2</color>
     <color name="sc_text_mid">#7C95A8</color>
     <color name="sc_text_dim">#4A6377</color>
     <color name="sc_ink">#001119</color>
+    <color name="sc_panel2_pressed">#1A2C3F</color>
+    <color name="sc_ripple_light">#40FFFFFF</color>
 
     <!-- Wikelo badge backgrounds (low-alpha tints) -->
     <color name="sc_warn_ink">#33FF8A3D</color>

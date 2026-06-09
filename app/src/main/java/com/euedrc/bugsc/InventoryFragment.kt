@@ -19,6 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -62,6 +64,7 @@ class InventoryFragment : Fragment() {
     private lateinit var btnRefresh: Button
     private lateinit var btnPrevPage: Button
     private lateinit var btnNextPage: Button
+    private var requestCountdownJob: kotlinx.coroutines.Job? = null
     private var inventoryItems: List<InventoryItem> = emptyList()
     private var currentDisplayPage = 0
 
@@ -315,18 +318,33 @@ class InventoryFragment : Fragment() {
         scope.launch {
             try {
                 val syncTime = formatDateTime(Date())
+                val statusPrefix = if (forceRefresh) "正在刷新 RSI 机库库存..." else "正在首次拉取 RSI 机库库存..."
                 val items = withContext(Dispatchers.IO) {
-                    client.fetchInventory(MAX_PAGES) { page, _, allItems ->
-                        scope.launch {
-                            tvStatus.text = "正在刷新 RSI 机库库存... 已加载第 $page 页，共 ${allItems.size} 项"
-                            tvLastSync.text = "最近同步：$syncTime（进行中）"
-                            tvLastSync.visibility = View.VISIBLE
-                            tvDebug.visibility = View.GONE
-                            saveCachedItems(allItems, syncTime)
-                            renderItems(allItems)
+                    client.fetchInventory(
+                        maxPages = MAX_PAGES,
+                        onPageFetched = { page, _, allItems ->
+                            scope.launch {
+                                requestCountdownJob?.cancel()
+                                tvStatus.text = "$statusPrefix 已加载第 $page 页，共 ${allItems.size} 项"
+                                tvLastSync.text = "最近同步：$syncTime（进行中）"
+                                tvLastSync.visibility = View.VISIBLE
+                                tvDebug.visibility = View.GONE
+                                saveCachedItems(allItems, syncTime)
+                                renderItems(allItems)
+                            }
+                        },
+                        onRequestStateChanged = { requestState ->
+                            scope.launch {
+                                startRequestCountdown(
+                                    prefix = statusPrefix,
+                                    requestState = requestState,
+                                    loadedItems = inventoryItems.size
+                                )
+                            }
                         }
-                    }
+                    )
                 }
+                requestCountdownJob?.cancel()
                 tvStatus.text = "库存已更新，共 ${items.size} 项"
                 tvLastSync.text = "最近同步：$syncTime"
                 tvLastSync.visibility = View.VISIBLE
@@ -335,15 +353,39 @@ class InventoryFragment : Fragment() {
                 saveCachedItems(items, syncTime)
                 renderItems(items)
             } catch (e: InventoryParseException) {
+                requestCountdownJob?.cancel()
                 tvStatus.text = "库存拉取失败"
                 showDebugLog()
                 showError(formatFetchError(e))
             } catch (e: Exception) {
+                requestCountdownJob?.cancel()
                 tvStatus.text = "库存拉取失败"
                 showDebugLog()
                 showError(formatFetchError(e))
             } finally {
+                requestCountdownJob?.cancel()
                 btnRefresh.isEnabled = true
+            }
+        }
+    }
+
+    private fun startRequestCountdown(
+        prefix: String,
+        requestState: InventoryRequestState,
+        loadedItems: Int
+    ) {
+        requestCountdownJob?.cancel()
+        requestCountdownJob = scope.launch {
+            val startedAt = System.currentTimeMillis()
+            while (isActive) {
+                val elapsedMs = System.currentTimeMillis() - startedAt
+                val remainingMs = (RsiInventoryClient.REQUEST_TIMEOUT_MS - elapsedMs).coerceAtLeast(0L)
+                val remainingSeconds = kotlin.math.ceil(remainingMs / 1000.0).toInt()
+                val loadedText = if (loadedItems > 0) "，已加载 ${loadedItems} 项" else ""
+                tvStatus.text =
+                    "$prefix 第 ${requestState.page} 页（第 ${requestState.attempt}/${requestState.maxAttempts} 次），本次请求剩余 ${remainingSeconds} 秒$loadedText"
+                if (remainingMs == 0L) break
+                delay(1000L)
             }
         }
     }
@@ -377,6 +419,7 @@ class InventoryFragment : Fragment() {
         tvError.visibility = View.GONE
         tvLastSync.visibility = View.GONE
         tvDebug.visibility = View.GONE
+        requestCountdownJob?.cancel()
         containerItems.removeAllViews()
         clearCachedItems()
         inventoryItems = emptyList()
@@ -724,6 +767,7 @@ class InventoryFragment : Fragment() {
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 
     override fun onDestroyView() {
+        requestCountdownJob?.cancel()
         super.onDestroyView()
         scope.cancel()
     }
