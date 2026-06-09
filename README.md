@@ -29,6 +29,7 @@ QQ群：330941212
 |---|---|---|---|
 | **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
 | **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exectimer.com） |
+| **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价 / 购买链接 |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
 | **查询** | 任务搜索 | 4.8.1 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
 | **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算 |
@@ -36,6 +37,7 @@ QQ群：330941212
 | **查询** | 矿物查询 | 4.7.0 | 矿石分布、出现概率、稀有度、含量范围 |
 | **个人信息** | 库存查看 | ONLINE | RSI 账号登录后拉取飞船/装备库存 |
 | **个人信息** | 角色修复 | RSI | 跳转 RSI 账号重置页执行 CHARACTER REPAIR |
+| **个人信息** | 检查更新 | GITHUB | 检查 GitHub Releases 最新版本并跳转下载 APK |
 
 ---
 
@@ -73,12 +75,17 @@ app/src/main/
 │   │   ├── PowerDistributionView.kt  # 电力面板自定义 View
 │   │   ├── ShipFitCodec.kt           # BUGFIT 配装码编解码
 │   │   └── ShipFitFragment.kt
+│   ├── wb/
+│   │   ├── WbFragment.kt             # 每日 WB 列表页
+│   │   ├── WbRepository.kt           # 本地缓存 + 远程同步
+│   │   └── WbRemoteClient.kt         # 手机端匿名抓取 RSI 官网 WB 数据
 │   ├── RsiInventoryClient.kt    # RSI 库存 HTTP 客户端
 │   ├── RsiCookieStore.kt        # RSI Session Cookie 管理
 │   ├── RsiWebViewSetup.kt       # WebView 登录桥
 │   └── ...Fragment.kt           # 各页面
 └── assets/
     ├── blueprint/               # 蓝图静态数据
+    ├── wb/                      # 每日 WB 兜底快照
     └── shipfit/                 # 飞船配装静态数据
 ```
 
@@ -184,6 +191,16 @@ python3 tools/export_location_translations.py
 ### 维克洛兑换
 
 `assets/wikelo/banu_materials.json`、`banu_trades.json` 目前为**手工维护**（无脚本）。游戏内巴努交易清单变动时手动更新对应文件。
+
+### 每日 WB
+
+每日 WB 功能展示 RSI 官网 Warbond 限时折扣船，支持：
+
+- 本地读取 `assets/wb/daily_wb.json` 作为离线兜底
+- 运行时同步最新折扣数据并缓存到 `filesDir/wb/`
+- 列表展示船名、缩略图、WB 优惠价、原价和官网购买链接
+
+当前 app 端使用 `WbRemoteClient` 直接匿名抓取 RSI 官网链路；仓库中保留 `tools/export_daily_wb.py` 作为本机手动导出快照脚本。
 
 ---
 
