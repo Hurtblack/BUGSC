@@ -18,7 +18,6 @@ data class ShipCard(
     val slots: List<ShipSlot>,
     val slotPatched: Boolean,
     val zhName: String?,
-    val wikiSlots: List<ShipSlot> = emptyList(),
 )
 
 data class ShipSlot(
@@ -48,7 +47,7 @@ class ShipFitDataRepository(private val context: Context) {
         val erkul = JSONObject(readAsset("shipfit/erkul_ship_slots_live.json"))
         val uex = JSONObject(readAsset("shipfit/uex_shipfit_dataset.json"))
         val zh = readZhAliasPack()
-        val wikiHardpoints = loadWikiHardpoints()
+        val wikiGuns = loadWikiGunSlots()
 
         val uexBySlug = mutableMapOf<String, JSONObject>()
         val uexByName = mutableMapOf<String, JSONObject>()
@@ -68,7 +67,10 @@ class ShipFitDataRepository(private val context: Context) {
             val localName = s.optString("localName")
             val name = s.optString("name")
             val rawSlots = parseSlots(s.optJSONArray("slots"))
-            val (slots, slotPatched) = applyShipSlotFallback(localName, rawSlots)
+            val (fallbackSlots, slotPatched) = applyShipSlotFallback(localName, rawSlots)
+            // 用 SC Wiki 的真实枪位替换 erkul 的「枪/武器炮塔」槽：erkul 对焊死炮塔只给
+            // 炮塔座、不展开内部武器，导致 F8C 等被算成 2×S2+5×S3（应为 4×S2+4×S3）。
+            val slots = replaceGunSlots(fallbackSlots, wikiGuns[localName].orEmpty())
             if (localName.isBlank() || slots.isEmpty()) continue
 
             val u = uexBySlug[localName] ?: uexByName[name.lowercase()]
@@ -96,7 +98,6 @@ class ShipFitDataRepository(private val context: Context) {
                 slots = slots,
                 slotPatched = slotPatched,
                 zhName = zh.ships[name]?.takeIf { it.isNotBlank() && !it.equals(name, ignoreCase = true) },
-                wikiSlots = wikiHardpoints[localName].orEmpty(),
             )
         }
         return result.sortedBy { it.name.lowercase() }
@@ -147,7 +148,12 @@ class ShipFitDataRepository(private val context: Context) {
         }.getOrDefault(emptyMap())
     }
 
-    private fun loadWikiHardpoints(): Map<String, List<ShipSlot>> {
+    /**
+     * 从 ship_hardpoints.json（由 tools/gen_ship_hardpoints.py 基于 SC Wiki API 生成）
+     * 读取每艘船的真实「枪位」。SC Wiki 递归展开了炮塔内部武器，每个枪位带 min/max 尺寸，
+     * 因此能修正 erkul 把焊死炮塔塌缩成单个炮塔座的缺陷。仅取 WeaponGun，导弹/反制仍由 erkul 提供。
+     */
+    private fun loadWikiGunSlots(): Map<String, List<ShipSlot>> {
         return runCatching {
             val json = JSONObject(readAsset("shipfit/ship_hardpoints.json"))
             val result = mutableMapOf<String, List<ShipSlot>>()
@@ -155,25 +161,37 @@ class ShipFitDataRepository(private val context: Context) {
             while (shipKeys.hasNext()) {
                 val shipId = shipKeys.next()
                 val typesObj = json.optJSONObject(shipId) ?: continue
+                val slotArr = typesObj.optJSONArray("WeaponGun") ?: continue
                 val slots = mutableListOf<ShipSlot>()
-                val typeKeys = typesObj.keys()
-                while (typeKeys.hasNext()) {
-                    val type = typeKeys.next()
-                    val slotArr = typesObj.optJSONArray(type) ?: continue
-                    for (i in 0 until slotArr.length()) {
-                        val s = slotArr.optJSONObject(i) ?: continue
-                        slots += ShipSlot(
-                            key = "wiki_${type}_$i",
-                            minSize = if (s.isNull("min")) null else s.optInt("min").takeIf { it > 0 },
-                            maxSize = if (s.isNull("max")) null else s.optInt("max").takeIf { it > 0 },
-                            types = listOf(type),
-                        )
-                    }
+                for (i in 0 until slotArr.length()) {
+                    val s = slotArr.optJSONObject(i) ?: continue
+                    slots += ShipSlot(
+                        key = "wiki_weapon_$i",
+                        minSize = if (s.isNull("min")) null else s.optInt("min").takeIf { it > 0 },
+                        maxSize = if (s.isNull("max")) null else s.optInt("max").takeIf { it > 0 },
+                        types = listOf("WeaponGun"),
+                    )
                 }
                 if (slots.isNotEmpty()) result[shipId] = slots
             }
             result
         }.getOrDefault(emptyMap())
+    }
+
+    // erkul 中应被 SC Wiki 枪位替换的「枪/武器炮塔」槽：types 仅含 WeaponGun/Turret。
+    // 牵引（tractor）、采矿（含 mining 关键字或 UtilityTurret/ToolArm）等非武器炮塔须保留。
+    private fun isErkulGunSlot(slot: ShipSlot): Boolean {
+        if (slot.types.isEmpty()) return false
+        if (slot.types.any { it != "WeaponGun" && it != "Turret" }) return false
+        if (slot.key.contains("tractor", ignoreCase = true)) return false
+        if (slot.key.contains("mining", ignoreCase = true)) return false
+        return true
+    }
+
+    /** wiki 有枪位数据时，剔除 erkul 的枪/武器炮塔槽并替换为真实展开的枪位；否则原样返回。 */
+    private fun replaceGunSlots(erkul: List<ShipSlot>, wikiGuns: List<ShipSlot>): List<ShipSlot> {
+        if (wikiGuns.isEmpty()) return erkul
+        return erkul.filterNot { isErkulGunSlot(it) } + wikiGuns
     }
 
     private fun parseSlots(arr: org.json.JSONArray?): List<ShipSlot> {

@@ -80,7 +80,7 @@ class ShipFitFragment : Fragment() {
     }
 
     private fun renderShipCard(ship: ShipCard) {
-        val displaySlots = mergeDisplaySlots(ship.slots, ship.wikiSlots)
+        val displaySlots = ship.slots
         val typeCounts = summarizeShipTypes(displaySlots)
         val sizeSummary = summarizeTypeSizes(displaySlots)
         val text = buildString {
@@ -142,18 +142,6 @@ class ShipFitFragment : Fragment() {
     private fun shipDisplayLabel(ship: ShipCard): String {
         val zh = ship.zhName
         return if (!zh.isNullOrBlank()) "$zh (${ship.name}) (${ship.id})" else "${ship.name} (${ship.id})"
-    }
-
-    private fun mergeDisplaySlots(erkul: List<ShipSlot>, wiki: List<ShipSlot>): List<ShipSlot> {
-        if (wiki.isEmpty()) return erkul
-        val erkulByType = erkul.groupBy { it.types.firstOrNull() ?: "" }.filterKeys { it.isNotBlank() }
-        val wikiByType = wiki.groupBy { it.types.firstOrNull() ?: "" }.filterKeys { it.isNotBlank() }
-        val allTypes = (erkulByType.keys + wikiByType.keys)
-        return allTypes.flatMap { type ->
-            val e = erkulByType[type].orEmpty()
-            val w = wikiByType[type].orEmpty()
-            if (e.size >= w.size) e else w
-        }
     }
 
     private fun summarizeShipTypes(slots: List<ShipSlot>): Map<String, Int> {

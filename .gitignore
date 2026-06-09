@@ -18,6 +18,7 @@ local.properties
 # Python 维护脚本缓存
 __pycache__/
 *.pyc
+tools/.cache/
 
 # 签名相关 - 永不入仓库
 *.jks
