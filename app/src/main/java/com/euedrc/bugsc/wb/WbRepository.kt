@@ -3,11 +3,7 @@ package com.euedrc.bugsc.wb
 import android.content.Context
 import android.util.Log
 import org.json.JSONObject
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
  * 每日 WB（RSI 官网 warbond 限时折扣船）数据仓库 —— 支持热更新，运行时不直连 RSI。
@@ -67,25 +63,17 @@ class WbRepository(private val context: Context) {
     // ---- 远程热更新 ----
 
     /**
-     * 从远程拉最新 JSON，远程 version 更高才原子写入缓存。
-     * @return true 表示有更新落盘；远程未配置 / 失败 / 版本不更高时返回 false。
-     * @throws Exception 网络/解析失败时抛出（供 UI toast 提示），调用方需 catch。
+     * 「同步」：在本机走完整 RSI 链路实时抓最新 warbond 折扣船，原子写入缓存。
+     *
+     * 之所以放手机端而非 CI：RSI 按 IP 信誉 403 拦截数据中心 IP（GitHub Actions 跑不通），
+     * 而用户手机是住宅/移动 IP 不被墙。抓到的数据始终视为最新（version=当前 epoch），直接覆盖缓存。
+     *
+     * @return true 表示成功抓取并落盘。
+     * @throws WbRemoteClient.WbFetchException 抓取/解析失败时抛出（供 UI toast），调用方需 catch。
      */
     fun refreshFromRemote(): Boolean {
-        if (RemoteConfig.url.isBlank()) {
-            debug("远程地址未配置，跳过热更新")
-            return false
-        }
-        val text = httpGet(RemoteConfig.url)
-        val remote = JSONObject(text)
-        // 远程必须有 items（哪怕空也算合法），否则视为脏数据拒绝写入
-        if (!remote.has("items")) throw IllegalStateException("远程数据缺少 items 字段")
-        val remoteVersion = versionOf(remote)
-        val localVersion = versionOf(bestJson())
-        if (remoteVersion <= localVersion) {
-            debug("远程版本 $remoteVersion <= 本地 $localVersion，无需更新")
-            return false
-        }
+        val fresh = WbRemoteClient().fetch()
+        val text = fresh.toString()
         val target = cacheFile()
         val tmp = File(target.parentFile, FILE_NAME + ".tmp")
         tmp.writeText(text)
@@ -93,7 +81,7 @@ class WbRepository(private val context: Context) {
             target.writeText(text); tmp.delete()
         }
         cachedJson = null
-        debug("已更新到版本 $remoteVersion")
+        debug("已实时刷新到版本 ${versionOf(fresh)}")
         return true
     }
 
@@ -147,30 +135,7 @@ class WbRepository(private val context: Context) {
         out
     }.getOrDefault(emptyMap())
 
-    private fun httpGet(urlStr: String): String {
-        val conn = URL(urlStr).openConnection() as HttpURLConnection
-        return try {
-            conn.connectTimeout = 20_000
-            conn.readTimeout = 20_000
-            conn.requestMethod = "GET"
-            conn.setRequestProperty("Accept", "application/json")
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val body = stream?.let { BufferedReader(InputStreamReader(it)).readText() } ?: ""
-            if (code !in 200..299) throw Exception("HTTP $code")
-            body
-        } finally {
-            conn.disconnect()
-        }
-    }
-
     private fun debug(msg: String) = Log.d(TAG, msg)
-
-    /** 远程数据托管配置。 */
-    object RemoteConfig {
-        /** `daily_wb.json` 的 raw 完整地址。留空则完全使用本地数据，不发起网络请求。 */
-        var url: String = "https://raw.githubusercontent.com/Hurtblack/BUGSC/main/wb/daily_wb.json"
-    }
 
     companion object {
         private const val TAG = "WbData"

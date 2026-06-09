@@ -8,15 +8,19 @@
 在 app 内查询 RSI 官网 pledge store 上带 **warbond** 标记的限时折扣船（每几小时可能变化），
 展示船名（中英）、缩略图、WB 优惠价 / 原价、跳转官网购买链接。提供「同步」按钮拉取最新数据。
 
-## 2. 核心决策：无后台，用 GitHub Actions 当「穷人后台」（方案 B）
+## 2. 核心决策（已修订）：从「CI 穷人后台」改为「手机端直连」
 
-app 自身**不直连 RSI**。脆弱的抓取/解析逻辑全部放在一个定时 CI 脚本里，在服务器端跑一次，
-产出一份静态 `daily_wb.json` 托管在 public GitHub repo 的 raw 地址；app 的同步按钮只是去拉这份 JSON。
+> **⚠️ 方案 B（GitHub Actions 当后台）已废弃。** 实测：RSI 按 IP 信誉对**数据中心 IP** 返回
+> `HTTP 403`，GitHub Actions runner 第一步 `GET /en/pledge` 就被挡，CI 永远跑不通。
+> 而**用户手机是住宅/移动 IP，不在黑名单**——被墙的 IP 这个根因只在云端存在。
+> 故改为：**「同步」按钮在手机本机走完整 RSI 抓取链路**（`WbRemoteClient`），assets 内置快照仅作首次/离线兜底。
+> 已删除 `.github/workflows/wb.yml` 与根目录 `wb/daily_wb.json`（CI 产物）。`tools/export_daily_wb.py` 保留作本机手动重生成快照用。
 
-理由：
-- RSI 接口需 CSRF token、字段会变。放 CI：接口变了改脚本即可，**不用发版重新上架 app**。
-- 反爬只需在 CI 一处对付一次，而不是每台用户手机各闯一次。
-- 与现有 `BlueprintDataRepository`（`filesDir 缓存 > assets 快照` + `refreshFromRemote`）模式完全一致。
+现行架构：
+- `WbRemoteClient`（手机端，匿名）：移植自 Python 脚本的 5 步链路，复用 app 已有 RSI cookie/csrf 套路。
+- `WbRepository.refreshFromRemote()`：调 `WbRemoteClient.fetch()` → 原子写入 filesDir 缓存（version=epoch，始终视为最新）。
+- 读取仍是 `filesDir 缓存 > assets 快照` 按 version 取高，与 `BlueprintDataRepository` 一致。
+- **代价**：RSI 改接口时需发版（不再「改脚本即可」）；schema 变了至少还有快照兜底不白屏。
 
 **已打通的链路（2026-06-09 实测并落地于 `tools/export_daily_wb.py`）：**
 
