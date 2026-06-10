@@ -116,7 +116,8 @@ class MainActivity : AppCompatActivity() {
     private fun showConsentDialog(prefs: SharedPreferences) {
         val message = SpannableStringBuilder(
             "欢迎使用 SCMobiGlas。\n\n本应用不收集、不上传任何个人信息，" +
-                "RSI 账号登录仅在您的设备本地完成。\n\n使用前请阅读并同意 ",
+                "RSI 账号登录仅在您的设备本地完成，登录信息仅作本地缓存，" +
+                "无任何后台上传行为。\n\n使用前请阅读并同意 ",
         )
         appendLegalLink(message, "《用户协议》", LegalDocs.AGREEMENT, "用户协议")
         message.append(" 与 ")
