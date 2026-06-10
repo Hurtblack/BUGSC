@@ -198,7 +198,6 @@ private fun SelectedTabFrame(modifier: Modifier = Modifier) {
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
         val radius = with(density) { 14.dp.toPx() }
-        val topRaise = with(density) { 10.dp.toPx() }
         val crownRaise = with(density) { 6.dp.toPx() }
         val notchDepth = with(density) { 6.dp.toPx() }
         val notchWidth = with(density) { 28.dp.toPx() }
@@ -211,7 +210,6 @@ private fun SelectedTabFrame(modifier: Modifier = Modifier) {
                 width = widthPx,
                 height = heightPx,
                 radius = radius,
-                topRaise = topRaise,
                 crownRaise = crownRaise,
                 notchWidth = notchWidth,
                 notchDepth = notchDepth,
@@ -246,7 +244,6 @@ private fun braceletFramePath(
     width: Float,
     height: Float,
     radius: Float,
-    topRaise: Float,
     crownRaise: Float,
     notchWidth: Float,
     notchDepth: Float,
@@ -255,7 +252,8 @@ private fun braceletFramePath(
     val left = 0f
     val right = width
     val bottom = height
-    val top = topRaise
+    // 上边框与未选中态对齐（y=0），拱顶向上方探出（Canvas 不裁剪自身边界）
+    val top = 0f
     val center = width / 2f
     val notchLeft = center - (notchWidth / 2f)
     val notchRight = center + (notchWidth / 2f)
