@@ -125,17 +125,89 @@
                 android:textSize="13sp" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btn_check_update"
+        <LinearLayout
+            android:id="@+id/card_about"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/button_inventory_primary"
-            android:paddingVertical="12dp"
-            android:text="检查更新"
-            android:textAllCaps="false"
-            android:textColor="@color/sc_ink"
-            android:textStyle="bold" />
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:letterSpacing="0.08"
+                    android:text="关于"
+                    android:textColor="@color/sc_text"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_version"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/tag_bg"
+                    android:fontFamily="monospace"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="2dp"
+                    android:textColor="@color/sc_accent"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/row_privacy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingVertical="8dp"
+                android:text="隐私政策"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/row_agreement"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingVertical="8dp"
+                android:text="用户协议"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/row_disclaimer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingVertical="8dp"
+                android:text="免责声明"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btn_check_update"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/button_inventory_primary"
+                android:paddingVertical="12dp"
+                android:text="检查更新"
+                android:textAllCaps="false"
+                android:textColor="@color/sc_ink"
+                android:textStyle="bold" />
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

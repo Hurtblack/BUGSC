@@ -1,13 +1,11 @@
 package com.euedrc.bugsc
 
-import android.app.AlertDialog
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -39,6 +37,11 @@ class ProfileFragment : Fragment() {
         binding.btnCheckUpdate.setOnClickListener {
             checkForUpdates()
         }
+
+        binding.tvVersion.text = "v${currentVersionName()}"
+        binding.rowPrivacy.setOnClickListener { navigateLegal(LegalDocs.PRIVACY, "隐私政策") }
+        binding.rowAgreement.setOnClickListener { navigateLegal(LegalDocs.AGREEMENT, "用户协议") }
+        binding.rowDisclaimer.setOnClickListener { navigateLegal(LegalDocs.DISCLAIMER, "免责声明") }
     }
 
     override fun onDestroyView() {
@@ -65,30 +68,18 @@ class ProfileFragment : Fragment() {
                     toast("当前已是最新版本")
                     return@onSuccess
                 }
-                showUpdateDialog(currentVersion, release)
+                AppUpdateNotifier.showUpdateDialog(requireContext(), currentVersion, release)
             }.onFailure {
                 toast("检查更新失败：${it.message ?: "网络错误"}")
             }
         }
     }
 
-    private fun showUpdateDialog(currentVersion: String, release: AppUpdateClient.ReleaseInfo) {
-        val targetUrl = release.apkUrl ?: release.pageUrl
-        val notes = release.notes.takeIf { it.isNotBlank() } ?: "暂无更新说明"
-        AlertDialog.Builder(requireContext())
-            .setTitle("发现新版本")
-            .setMessage(
-                "当前版本：$currentVersion\n最新版本：${release.versionName}\n\n$notes"
-            )
-            .setPositiveButton("下载更新") { _, _ ->
-                runCatching {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)))
-                }.onFailure {
-                    toast("无法打开下载链接")
-                }
-            }
-            .setNegativeButton("取消", null)
-            .show()
+    private fun navigateLegal(doc: String, title: String) {
+        findNavController().navigate(
+            R.id.LegalFragment,
+            bundleOf(LegalFragment.ARG_DOC to doc, LegalFragment.ARG_TITLE to title),
+        )
     }
 
     private fun currentVersionName(): String =
