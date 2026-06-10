@@ -32,8 +32,8 @@
   - 个人页手动「检查更新」按钮不受忽略影响，始终能弹。
 - 复用 `ProfileFragment` 现有的版本比较与下载跳转逻辑，抽取公共部分（建议新建 `AppUpdateNotifier` 或类似辅助类，避免 MainActivity 和 ProfileFragment 重复代码）。
 - 合规约束：首次启动时，自动检查必须发生在用户同意隐私政策**之后**；未同意前不发起任何网络请求。
-- 双平台预留：将来要同时发 GitHub + Gitee Releases（国内下载与 API 可达性更好）。本期把 `AppUpdateClient` 改造为「更新源列表」结构：定义 `UpdateSource`（源名称 + latest-release API URL + 对应 JSON 解析），客户端按顺序逐源尝试，首个成功者生效。本期列表中只有 GitHub 一项；Gitee 仓库建立后只需追加一个源条目（Gitee API 为 `https://gitee.com/api/v5/repos/{owner}/{repo}/releases/latest`，字段与 GitHub 类似但 assets 结构略有差异，届时实现其解析）。
-- `release.sh` 同样预留：发布步骤封装为「按平台发布」函数，本期只有 GitHub 实现，Gitee 平台留出注释位（推送第二 remote + Gitee Releases API 创建 release 并上传 apk）。
+- 双平台：Gitee 仓库已建立（`https://gitee.com/hurtblack/BUGSC`）。`AppUpdateClient` 改造为「更新源列表」结构：定义 `UpdateSource`（源名称 + latest-release API URL + 对应 JSON 解析），客户端按顺序逐源尝试，首个成功者生效。默认源顺序：GitHub（主）→ Gitee（回退，国内 api.github.com 不可达时兜底）。Gitee API 为 `https://gitee.com/api/v5/repos/hurtblack/BUGSC/releases/latest`，响应无 `html_url` 字段，页面地址按 `https://gitee.com/hurtblack/BUGSC/releases/tag/{tag}` 拼接，需单独的 `parseGiteeRelease`。
+- `release.sh`：发布步骤封装为「按平台发布」函数，GitHub 与 Gitee 都实装——推送 gitee remote（不存在则自动添加）、调 Gitee API 创建 Release 并上传 APK（令牌走 git credential，host=gitee.com，即用户配置的私人令牌）。任一平台失败不阻断另一平台。
 
 ## 3. 隐私合规三件套
 
@@ -43,10 +43,10 @@
 
 - `privacy_policy.html` 隐私政策：
   - 运营署名：SCM 组织（个人开发者维护）
-  - 联系方式：GitHub 仓库 Issues（https://github.com/Hurtblack/BUGSC/issues，后续可能补充 Gitee）+ 邮箱 hurtblack@qq.com
+  - 联系方式：GitHub Issues（https://github.com/Hurtblack/BUGSC/issues）、Gitee Issues（https://gitee.com/hurtblack/BUGSC/issues）+ 邮箱 hurtblack@qq.com
   - 声明：应用本身不收集、不上传任何个人信息；无第三方统计/广告 SDK
   - RSI 账号登录仅在本地 WebView 内完成，登录 Cookie 仅保存在本机，不会发送给开发者
-  - 列出应用访问的第三方服务及用途：robertsspaceindustries.com（账号/库存/商店数据）、issue-council.robertsspaceindustries.com（问题议会）、api.github.com 与 raw.githubusercontent.com（应用更新与数据文件）、api.uexcorp.uk（游戏数据）、exectimer.com（活动计时）
+  - 列出应用访问的第三方服务及用途：robertsspaceindustries.com（账号/库存/商店数据）、issue-council.robertsspaceindustries.com（问题议会）、api.github.com 与 raw.githubusercontent.com（应用更新与数据文件）、gitee.com（应用更新备用源）、api.uexcorp.uk（游戏数据）、exectimer.com（活动计时）
   - 权限说明：仅 INTERNET 与 ACCESS_NETWORK_STATE
 - `user_agreement.html` 用户协议（简短）：使用规范、按现状提供、责任限制
 - `disclaimer.html` 免责声明：非官方应用，与 Cloud Imperium Games / Roberts Space Industries 无任何关联；Star Citizen® 相关商标与素材归 CIG 所有
@@ -81,4 +81,4 @@
 
 - 不做独立公告系统（Release body 即公告）
 - 不改包名 `com.euedrc.bugsc`、不改 GitHub 仓库名
-- 本期不实现 Gitee 源的具体解析与发布调用，但更新检查与 release.sh 均按多平台结构预留接缝（待 Gitee 仓库建立后填充）
+- （Gitee 仓库已建立，更新检查回退源与双平台发版均在本期实装）
