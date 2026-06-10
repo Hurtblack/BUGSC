@@ -137,4 +137,17 @@
         android:label="每日 WB"
         tools:layout="@layout/fragment_wb" />
 
+    <fragment
+        android:id="@+id/LegalFragment"
+        android:name="com.euedrc.bugsc.LegalFragment"
+        android:label="协议与声明"
+        tools:layout="@layout/fragment_legal">
+        <argument
+            android:name="doc"
+            app:argType="string" />
+        <argument
+            android:name="title"
+            app:argType="string" />
+    </fragment>
+
 </navigation>
