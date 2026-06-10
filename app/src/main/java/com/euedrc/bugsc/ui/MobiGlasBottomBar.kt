@@ -115,7 +115,7 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, onClick: () -> Un
         label = "lift",
     )
     val frameLift by animateDpAsState(
-        targetValue = if (selected) (-6).dp else 0.dp,
+        targetValue = if (selected) (-12).dp else 0.dp,
         animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
         label = "frameLift",
     )
@@ -130,7 +130,7 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, onClick: () -> Un
         label = "scale",
     )
     val contentRestOffset by animateDpAsState(
-        targetValue = if (selected) 0.dp else (-4).dp,
+        targetValue = if (selected) 0.dp else (-8).dp,
         animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
         label = "contentRestOffset",
     )
@@ -198,7 +198,6 @@ private fun SelectedTabFrame(modifier: Modifier = Modifier) {
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
         val radius = with(density) { 14.dp.toPx() }
-        val crownRaise = with(density) { 6.dp.toPx() }
         val notchDepth = with(density) { 6.dp.toPx() }
         val notchWidth = with(density) { 28.dp.toPx() }
         val accentWidth = with(density) { 20.dp.toPx() }
@@ -210,7 +209,6 @@ private fun SelectedTabFrame(modifier: Modifier = Modifier) {
                 width = widthPx,
                 height = heightPx,
                 radius = radius,
-                crownRaise = crownRaise,
                 notchWidth = notchWidth,
                 notchDepth = notchDepth,
             )
@@ -244,7 +242,6 @@ private fun braceletFramePath(
     width: Float,
     height: Float,
     radius: Float,
-    crownRaise: Float,
     notchWidth: Float,
     notchDepth: Float,
 ): Path {
@@ -252,14 +249,14 @@ private fun braceletFramePath(
     val left = 0f
     val right = width
     val bottom = height
-    // 上边框与未选中态对齐（y=0），拱顶向上方探出（Canvas 不裁剪自身边界）
+    // 顶边为平直线；「弹起」的空间感由整框 frameLift 上移动画体现
     val top = 0f
     val center = width / 2f
     val notchLeft = center - (notchWidth / 2f)
     val notchRight = center + (notchWidth / 2f)
 
     path.moveTo(left + radius, top)
-    path.quadraticTo(center, top - crownRaise, right - radius, top)
+    path.lineTo(right - radius, top)
     path.quadraticTo(right, top, right, top + radius)
     path.lineTo(right, bottom - radius)
     path.quadraticTo(right, bottom, right - radius, bottom)
