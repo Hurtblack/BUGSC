@@ -22,7 +22,8 @@ class MissionQuerySupportTest {
             ),
         )
 
-        assertEquals("[DESTINATION] 跑腿", mission.displayTitle)
+        // displayTitle 会把英文模板占位符洗成中文（cleanMissionPlaceholders）
+        assertEquals("目的地 跑腿", mission.displayTitle)
         assertEquals("猎头帮", mission.displayFaction)
         assertEquals("Pyro", mission.displaySystems)
         assertTrue(mission.searchTokens.contains("猎头帮"))
