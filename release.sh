@@ -9,7 +9,7 @@
 #   2. versionCode 自动 +1，versionName 改为参数值
 #   3. 打 release 包 (跳过 lint，避免网络拉取依赖失败)
 #   4. 提交版本号改动、打 tag、推送 main + tag
-#   5. 调 GitHub API 创建 Release 并上传 APK (复用 git 已存凭证)
+#   5. 调 GitHub/Gitee API 创建 Release 并上传 APK (复用 git 已存凭证)
 #
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -65,39 +65,92 @@ git tag -a "$TAG" -m "${TAG}${RELEASE_NOTE:+ — $RELEASE_NOTE}"
 git push origin HEAD
 git push origin "$TAG"
 
-# ---- GitHub Release ----
-echo "▶ 创建 GitHub Release 并上传 APK..."
-REMOTE_URL=$(git remote get-url origin)
-REPO=$(echo "$REMOTE_URL" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
-TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill 2>/dev/null | sed -n 's/^password=//p')
-if [ -z "$TOKEN" ]; then
-  echo "⚠ 取不到 GitHub 凭证，代码/tag 已推送，但 Release 需手动创建。"
-  exit 0
-fi
+# ---- 平台发布 ----
+publish_github() {
+  echo "▶ 创建 GitHub Release 并上传 APK..."
+  local REMOTE_URL REPO TOKEN NOTE_JSON NOTE_ESC RESP UPLOAD_URL ASSET UP STATE
+  REMOTE_URL=$(git remote get-url origin)
+  REPO=$(echo "$REMOTE_URL" | sed -E 's#^.*github\.com[:/]##; s#\.git$##')
+  TOKEN=$(printf "protocol=https\nhost=github.com\n\n" | git credential fill 2>/dev/null | sed -n 's/^password=//p')
+  if [ -z "$TOKEN" ]; then
+    echo "⚠ 取不到 GitHub 凭证，代码/tag 已推送，但 Release 需手动创建。"
+    return 0
+  fi
 
-NOTE_JSON="${RELEASE_NOTE:-对应 Star Citizen 数据，详见 README。}"
-NOTE_ESC=$(printf '%s' "$NOTE_JSON" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+  NOTE_JSON="${RELEASE_NOTE:-对应 Star Citizen 数据，详见 README。}"
+  NOTE_ESC=$(printf '%s' "$NOTE_JSON" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 
-RESP=$(curl -s -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github+json" \
-  -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":${NOTE_ESC},\"draft\":false,\"prerelease\":false}" \
-  "https://api.github.com/repos/${REPO}/releases")
-UPLOAD_URL=$(echo "$RESP" | sed -n 's/.*"upload_url": *"\([^"]*\){.*/\1/p')
-if [ -z "$UPLOAD_URL" ]; then
-  echo "❌ Release 创建失败，响应片段："
-  echo "$RESP" | head -20
-  exit 1
-fi
+  RESP=$(curl -s -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github+json" \
+    -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":${NOTE_ESC},\"draft\":false,\"prerelease\":false}" \
+    "https://api.github.com/repos/${REPO}/releases")
+  UPLOAD_URL=$(echo "$RESP" | sed -n 's/.*"upload_url": *"\([^"]*\){.*/\1/p')
+  if [ -z "$UPLOAD_URL" ]; then
+    echo "❌ GitHub Release 创建失败，响应片段："
+    echo "$RESP" | head -20
+    return 1
+  fi
 
-ASSET="/tmp/SCMobiGlas-${TAG}.apk"
-cp "$APK_SRC" "$ASSET"
-UP=$(curl -s -H "Authorization: token $TOKEN" \
-  -H "Content-Type: application/vnd.android.package-archive" \
-  --data-binary @"$ASSET" "${UPLOAD_URL}?name=SCMobiGlas-${TAG}.apk")
-rm -f "$ASSET"
-STATE=$(echo "$UP" | sed -n 's/.*"state": *"\([^"]*\)".*/\1/p')
+  ASSET="/tmp/SCMobiGlas-${TAG}.apk"
+  cp "$APK_SRC" "$ASSET"
+  UP=$(curl -s -H "Authorization: token $TOKEN" \
+    -H "Content-Type: application/vnd.android.package-archive" \
+    --data-binary @"$ASSET" "${UPLOAD_URL}?name=SCMobiGlas-${TAG}.apk")
+  rm -f "$ASSET"
+  STATE=$(echo "$UP" | sed -n 's/.*"state": *"\([^"]*\)".*/\1/p')
+  echo "   GitHub 资产: SCMobiGlas-${TAG}.apk (state=$STATE)"
+  echo "   GitHub 页面: https://github.com/${REPO}/releases/tag/${TAG}"
+}
+
+GITEE_REPO="hurtblack/BUGSC"
+
+publish_gitee() {
+  echo "▶ 推送 Gitee 并创建 Release..."
+  local TOKEN NOTE_JSON NOTE_ESC RESP RELEASE_ID ASSET UP
+  if ! git remote get-url gitee >/dev/null 2>&1; then
+    git remote add gitee "https://gitee.com/${GITEE_REPO}.git"
+  fi
+  git push gitee HEAD:main
+  git push gitee "$TAG"
+
+  TOKEN=$(printf "protocol=https\nhost=gitee.com\n\n" | git credential fill 2>/dev/null | sed -n 's/^password=//p')
+  if [ -z "$TOKEN" ]; then
+    echo "⚠ 取不到 Gitee 令牌，代码/tag 已推送 Gitee，但 Release 需手动创建。"
+    return 0
+  fi
+
+  NOTE_JSON="${RELEASE_NOTE:-对应 Star Citizen 数据，详见 README。}"
+  NOTE_ESC=$(printf '%s' "$NOTE_JSON" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+
+  RESP=$(curl -s -X POST -H "Content-Type: application/json" \
+    -d "{\"access_token\":\"${TOKEN}\",\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":${NOTE_ESC},\"target_commitish\":\"main\"}" \
+    "https://gitee.com/api/v5/repos/${GITEE_REPO}/releases")
+  RELEASE_ID=$(echo "$RESP" | sed -n 's/.*"id": *\([0-9][0-9]*\).*/\1/p' | head -1)
+  if [ -z "$RELEASE_ID" ]; then
+    echo "❌ Gitee Release 创建失败，响应片段："
+    echo "$RESP" | head -20
+    return 1
+  fi
+
+  ASSET="/tmp/SCMobiGlas-${TAG}.apk"
+  cp "$APK_SRC" "$ASSET"
+  UP=$(curl -s -X POST \
+    -F "access_token=${TOKEN}" \
+    -F "file=@${ASSET}" \
+    "https://gitee.com/api/v5/repos/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files")
+  rm -f "$ASSET"
+  if echo "$UP" | grep -q '"browser_download_url"'; then
+    echo "   Gitee 资产: SCMobiGlas-${TAG}.apk 上传成功"
+  else
+    echo "⚠ Gitee APK 上传可能失败，响应片段："
+    echo "$UP" | head -10
+  fi
+  echo "   Gitee 页面: https://gitee.com/${GITEE_REPO}/releases/tag/${TAG}"
+}
+
+# 任一平台失败不阻断另一平台（set -e 环境下用 || true 兜底）
+publish_github || true
+publish_gitee || true
 
 echo ""
 echo "✅ 发版完成"
 echo "   版本:   $TAG (versionCode $NEW_CODE)"
-echo "   资产:   SCMobiGlas-${TAG}.apk (state=$STATE)"
-echo "   页面:   https://github.com/${REPO}/releases/tag/${TAG}"
