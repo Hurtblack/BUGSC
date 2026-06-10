@@ -50,7 +50,7 @@ rm -f "${GRADLE_FILE}.bak"
 echo "▶ 打 release 包..."
 ./gradlew :app:assembleRelease -x lintVitalRelease --console=plain
 
-APK_SRC="app/build/outputs/apk/release/bug公民-release-v${VERSION_NAME}.apk"
+APK_SRC="app/build/outputs/apk/release/SCMobiGlas-release-v${VERSION_NAME}.apk"
 if [ ! -f "$APK_SRC" ]; then
   echo "❌ 没找到 APK: $APK_SRC"
   exit 1
@@ -88,16 +88,16 @@ if [ -z "$UPLOAD_URL" ]; then
   exit 1
 fi
 
-ASSET="/tmp/BUGSC-${TAG}.apk"
+ASSET="/tmp/SCMobiGlas-${TAG}.apk"
 cp "$APK_SRC" "$ASSET"
 UP=$(curl -s -H "Authorization: token $TOKEN" \
   -H "Content-Type: application/vnd.android.package-archive" \
-  --data-binary @"$ASSET" "${UPLOAD_URL}?name=BUGSC-${TAG}.apk")
+  --data-binary @"$ASSET" "${UPLOAD_URL}?name=SCMobiGlas-${TAG}.apk")
 rm -f "$ASSET"
 STATE=$(echo "$UP" | sed -n 's/.*"state": *"\([^"]*\)".*/\1/p')
 
 echo ""
 echo "✅ 发版完成"
 echo "   版本:   $TAG (versionCode $NEW_CODE)"
-echo "   资产:   BUGSC-${TAG}.apk (state=$STATE)"
+echo "   资产:   SCMobiGlas-${TAG}.apk (state=$STATE)"
 echo "   页面:   https://github.com/${REPO}/releases/tag/${TAG}"

@@ -1,4 +1,4 @@
-# BUG公民
+# SCMobiGlas
 
 中文星际公民工具 App
 
@@ -208,7 +208,7 @@ python3 tools/export_location_translations.py
 
 ```bash
 ./gradlew assembleDebug
-# 输出：app/build/outputs/apk/debug/bug公民-debug-v{versionName}.apk
+# 输出：app/build/outputs/apk/debug/SCMobiGlas-debug-v{versionName}.apk
 ```
 
 ---

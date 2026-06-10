@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Bug公民"
+rootProject.name = "SCMobiGlas"
 include(":app")
  
