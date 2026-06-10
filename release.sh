@@ -96,14 +96,14 @@ publish_github() {
     return 1
   fi
 
-  ASSET="/tmp/SCMobiGlas-${TAG}.apk"
+  ASSET="/tmp/SCMobiGlas-release-${TAG}.apk"
   cp "$APK_SRC" "$ASSET"
   UP=$(curl -s -H "Authorization: token $TOKEN" \
     -H "Content-Type: application/vnd.android.package-archive" \
-    --data-binary @"$ASSET" "${UPLOAD_URL}?name=SCMobiGlas-${TAG}.apk")
+    --data-binary @"$ASSET" "${UPLOAD_URL}?name=SCMobiGlas-release-${TAG}.apk")
   rm -f "$ASSET"
   STATE=$(echo "$UP" | sed -n 's/.*"state": *"\([^"]*\)".*/\1/p')
-  echo "   GitHub 资产: SCMobiGlas-${TAG}.apk (state=$STATE)"
+  echo "   GitHub 资产: SCMobiGlas-release-${TAG}.apk (state=$STATE)"
   echo "   GitHub 页面: https://github.com/${REPO}/releases/tag/${TAG}"
 }
 
@@ -139,7 +139,7 @@ except Exception:
     return 1
   fi
 
-  ASSET="/tmp/SCMobiGlas-${TAG}.apk"
+  ASSET="/tmp/SCMobiGlas-release-${TAG}.apk"
   cp "$APK_SRC" "$ASSET"
   UP=$(curl -s -X POST \
     -F "access_token=${TOKEN}" \
@@ -147,7 +147,7 @@ except Exception:
     "https://gitee.com/api/v5/repos/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files")
   rm -f "$ASSET"
   if echo "$UP" | grep -q '"browser_download_url"'; then
-    echo "   Gitee 资产: SCMobiGlas-${TAG}.apk 上传成功"
+    echo "   Gitee 资产: SCMobiGlas-release-${TAG}.apk 上传成功"
   else
     echo "⚠ Gitee APK 上传可能失败，响应片段："
     echo "$UP" | head -10
