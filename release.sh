@@ -24,6 +24,7 @@ if [ -z "$VERSION_NAME" ]; then
 fi
 TAG="v${VERSION_NAME}"
 GRADLE_FILE="app/build.gradle.kts"
+GITEE_REPO="hurtblack/BUGSC"
 
 # ---- 前置校验 ----
 if [ -n "$(git status --porcelain)" ]; then
@@ -33,6 +34,11 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 if git rev-parse "$TAG" >/dev/null 2>&1; then
   echo "❌ tag $TAG 已存在，请换一个版本号。"
+  exit 1
+fi
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  echo "❌ 请在 main 分支执行发版，当前分支: $CURRENT_BRANCH"
   exit 1
 fi
 
@@ -101,16 +107,14 @@ publish_github() {
   echo "   GitHub 页面: https://github.com/${REPO}/releases/tag/${TAG}"
 }
 
-GITEE_REPO="hurtblack/BUGSC"
-
 publish_gitee() {
   echo "▶ 推送 Gitee 并创建 Release..."
   local TOKEN NOTE_JSON NOTE_ESC RESP RELEASE_ID ASSET UP
   if ! git remote get-url gitee >/dev/null 2>&1; then
     git remote add gitee "https://gitee.com/${GITEE_REPO}.git"
   fi
-  git push gitee HEAD:main
-  git push gitee "$TAG"
+  git push gitee HEAD:main || { echo "❌ Gitee 推送失败，跳过 Gitee Release。"; return 1; }
+  git push gitee "$TAG" || { echo "❌ Gitee tag 推送失败，跳过 Gitee Release。"; return 1; }
 
   TOKEN=$(printf "protocol=https\nhost=gitee.com\n\n" | git credential fill 2>/dev/null | sed -n 's/^password=//p')
   if [ -z "$TOKEN" ]; then
@@ -124,7 +128,11 @@ publish_gitee() {
   RESP=$(curl -s -X POST -H "Content-Type: application/json" \
     -d "{\"access_token\":\"${TOKEN}\",\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":${NOTE_ESC},\"target_commitish\":\"main\"}" \
     "https://gitee.com/api/v5/repos/${GITEE_REPO}/releases")
-  RELEASE_ID=$(echo "$RESP" | sed -n 's/.*"id": *\([0-9][0-9]*\).*/\1/p' | head -1)
+  RELEASE_ID=$(echo "$RESP" | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin)["id"])
+except Exception:
+    pass')
   if [ -z "$RELEASE_ID" ]; then
     echo "❌ Gitee Release 创建失败，响应片段："
     echo "$RESP" | head -20
