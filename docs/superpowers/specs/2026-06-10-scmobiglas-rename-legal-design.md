@@ -32,7 +32,8 @@
   - 个人页手动「检查更新」按钮不受忽略影响，始终能弹。
 - 复用 `ProfileFragment` 现有的版本比较与下载跳转逻辑，抽取公共部分（建议新建 `AppUpdateNotifier` 或类似辅助类，避免 MainActivity 和 ProfileFragment 重复代码）。
 - 合规约束：首次启动时，自动检查必须发生在用户同意隐私政策**之后**；未同意前不发起任何网络请求。
-- 预留多源：将来要发 Gitee Releases（国内下载与 API 可达性更好），`AppUpdateClient` 的 API URL 已可注入；本期不实现 Gitee 源，待仓库建立后再加「GitHub 失败回退 Gitee」。
+- 双平台预留：将来要同时发 GitHub + Gitee Releases（国内下载与 API 可达性更好）。本期把 `AppUpdateClient` 改造为「更新源列表」结构：定义 `UpdateSource`（源名称 + latest-release API URL + 对应 JSON 解析），客户端按顺序逐源尝试，首个成功者生效。本期列表中只有 GitHub 一项；Gitee 仓库建立后只需追加一个源条目（Gitee API 为 `https://gitee.com/api/v5/repos/{owner}/{repo}/releases/latest`，字段与 GitHub 类似但 assets 结构略有差异，届时实现其解析）。
+- `release.sh` 同样预留：发布步骤封装为「按平台发布」函数，本期只有 GitHub 实现，Gitee 平台留出注释位（推送第二 remote + Gitee Releases API 创建 release 并上传 apk）。
 
 ## 3. 隐私合规三件套
 
@@ -80,4 +81,4 @@
 
 - 不做独立公告系统（Release body 即公告）
 - 不改包名 `com.euedrc.bugsc`、不改 GitHub 仓库名
-- 本期不实现 Gitee 发布与更新回退源（待 Gitee 仓库建立后另行处理）
+- 本期不实现 Gitee 源的具体解析与发布调用，但更新检查与 release.sh 均按多平台结构预留接缝（待 Gitee 仓库建立后填充）
