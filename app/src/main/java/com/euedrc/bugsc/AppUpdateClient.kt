@@ -47,10 +47,10 @@ class AppUpdateClient(
         private const val GITEE_LATEST_RELEASE_API_URL =
             "https://gitee.com/api/v5/repos/$GITEE_REPO/releases/latest"
 
-        // GitHub 为主源，国内访问 api.github.com 失败时回退 Gitee
+        // Gitee 为主源（国内访问与下载更快），失败时回退 GitHub
         val DEFAULT_SOURCES = listOf(
-            UpdateSource("GitHub", GITHUB_LATEST_RELEASE_API_URL, Companion::parseRelease),
             UpdateSource("Gitee", GITEE_LATEST_RELEASE_API_URL, Companion::parseGiteeRelease),
+            UpdateSource("GitHub", GITHUB_LATEST_RELEASE_API_URL, Companion::parseRelease),
         )
 
         private fun httpGet(url: String): String {

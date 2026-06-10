@@ -207,8 +207,8 @@
                     android:fontFamily="monospace"
                     android:paddingHorizontal="6dp"
                     android:paddingVertical="2dp"
-                    android:text="DEV"
-                    android:textColor="@color/sc_warn"
+                    android:text="WEB"
+                    android:textColor="@color/sc_accent"
                     android:textSize="10sp" />
             </LinearLayout>
 
@@ -216,7 +216,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="后续将持续新增独立功能模块"
+                android:text="SCM 网站工具栏，浏览器打开 flowcld.xyz/tools"
                 android:textColor="@color/sc_text_mid"
                 android:textSize="13sp" />
         </LinearLayout>

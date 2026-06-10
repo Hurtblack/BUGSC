@@ -1,5 +1,7 @@
 package com.euedrc.bugsc
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -33,12 +35,21 @@ class ToolsFragment : Fragment() {
             findNavController().navigate(R.id.WbFragment)
         }
         binding.cardComing.setOnClickListener {
-            Toast.makeText(requireContext(), "陆续开发中", Toast.LENGTH_SHORT).show()
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SCM_TOOLS_URL)))
+            }.onFailure {
+                Toast.makeText(requireContext(), "无法打开浏览器", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+    }
+
+    companion object {
+        /** SCM 网站工具栏（合作方维护） */
+        private const val SCM_TOOLS_URL = "https://flowcld.xyz/tools"
     }
 }
