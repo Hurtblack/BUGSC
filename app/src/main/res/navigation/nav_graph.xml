@@ -144,10 +144,12 @@
         tools:layout="@layout/fragment_legal">
         <argument
             android:name="doc"
-            app:argType="string" />
+            app:argType="string"
+            android:defaultValue="privacy_policy.html" />
         <argument
             android:name="title"
-            app:argType="string" />
+            app:argType="string"
+            android:defaultValue="隐私政策" />
     </fragment>
 
 </navigation>
