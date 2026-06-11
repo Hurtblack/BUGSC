@@ -144,6 +144,22 @@
         tools:layout="@layout/fragment_wb" />
 
     <fragment
+        android:id="@+id/MarketFragment"
+        android:name="com.euedrc.bugsc.market.MarketFragment"
+        android:label="SCM 市场"
+        tools:layout="@layout/fragment_market" />
+
+    <fragment
+        android:id="@+id/MarketDetailFragment"
+        android:name="com.euedrc.bugsc.market.MarketDetailFragment"
+        android:label="订单详情"
+        tools:layout="@layout/fragment_market_detail">
+        <argument
+            android:name="orderNumber"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
         android:id="@+id/LegalFragment"
         android:name="com.euedrc.bugsc.LegalFragment"
         android:label="协议与声明"

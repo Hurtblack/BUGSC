@@ -34,6 +34,9 @@ class QueryFragment : Fragment() {
         binding.cardWikelo.setOnClickListener {
             findNavController().navigate(R.id.WikeloFragment)
         }
+        binding.cardMarket.setOnClickListener {
+            findNavController().navigate(R.id.MarketFragment)
+        }
         binding.cardMining.setOnClickListener {
             findNavController().navigate(R.id.MiningFragment)
         }
