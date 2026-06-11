@@ -83,8 +83,8 @@ fun MobiGlasBottomBar(
                         rotationX = 26f
                         cameraDistance = 9f * density.density
                     }
-                    .padding(horizontal = 12.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 items.forEachIndexed { index, item ->
@@ -138,7 +138,7 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, onClick: () -> Un
 
     Box(
         modifier = Modifier
-            .width(92.dp)
+            .width(78.dp)
             .height(60.dp)
             .graphicsLayer {
                 translationY = frameLift.toPx()
@@ -178,12 +178,12 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, onClick: () -> Un
                 imageVector = item.icon,
                 contentDescription = item.label,
                 tint = iconColor,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(28.dp),
             )
             Text(
                 text = item.label,
                 color = iconColor,
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                 modifier = Modifier.padding(top = 6.dp),
             )

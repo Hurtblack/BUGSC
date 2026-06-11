@@ -5,12 +5,18 @@
     android:id="@+id/nav_graph"
     app:startDestination="@id/ToolsFragment">
 
-    <!-- 底部栏三个顶层落地页 -->
+    <!-- 底部栏四个顶层落地页 -->
     <fragment
         android:id="@+id/ToolsFragment"
         android:name="com.euedrc.bugsc.ToolsFragment"
         android:label="工具"
         tools:layout="@layout/fragment_tools" />
+
+    <fragment
+        android:id="@+id/NewsFragment"
+        android:name="com.euedrc.bugsc.news.NewsFragment"
+        android:label="资讯"
+        tools:layout="@layout/fragment_news" />
 
     <fragment
         android:id="@+id/QueryFragment"

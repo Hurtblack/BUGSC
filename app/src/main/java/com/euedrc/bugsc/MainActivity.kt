@@ -11,6 +11,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -45,11 +46,12 @@ class MainActivity : AppCompatActivity() {
         private const val LEGAL_VERSION = 1
     }
 
-    // 底部栏三个顶层目的地，顺序与 items 一致
-    private val topLevel = listOf(R.id.ToolsFragment, R.id.QueryFragment, R.id.ProfileFragment)
+    // 底部栏四个顶层目的地，顺序与 items 一致
+    private val topLevel = listOf(R.id.ToolsFragment, R.id.NewsFragment, R.id.QueryFragment, R.id.ProfileFragment)
 
     private val items = listOf(
         MobiGlasItem("工具", Icons.Filled.Build),
+        MobiGlasItem("资讯", Icons.AutoMirrored.Filled.Article),
         MobiGlasItem("查询", Icons.Filled.Search),
         MobiGlasItem("个人信息", Icons.Filled.Person),
     )

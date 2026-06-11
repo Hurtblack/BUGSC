@@ -387,7 +387,7 @@ class HangarTimerFragment : Fragment() {
             try {
                 val selection = selectClosestSyncSource()
                 val at = selection.projectedAnchorSeconds
-                val lights = DEFAULT_LIGHTS.toList()
+                val lights = selection.anchorLights
 
                 handler.post {
                     persistAnchor(lights, at)
@@ -435,20 +435,12 @@ class HangarTimerFragment : Fragment() {
 
         runCatching {
             val body = fetchText(EXECTIMER_URL)
-            candidates += HangarTimerSyncSources.SyncCandidate(
-                name = "exectimer",
-                anchorSeconds = HangarTimerSyncSources.parseExecTimerAnchorSeconds(body),
-                cycleSeconds = HangarTimerSyncSources.parseExecTimerCycleSeconds(body)
-            )
+            candidates += HangarTimerSyncSources.buildExecTimerCandidate(body)
         }
 
         runCatching {
             val script = fetchText(XYXYLL_APP_JS_URL)
-            candidates += HangarTimerSyncSources.SyncCandidate(
-                name = "exec.xyxyll.com",
-                anchorSeconds = HangarTimerSyncSources.parseXyxyllAnchorSeconds(script),
-                cycleSeconds = HangarTimerSyncSources.parseXyxyllCycleSeconds(script)
-            )
+            candidates += HangarTimerSyncSources.buildXyxyllCandidate(script)
         }
 
         if (candidates.isEmpty()) {

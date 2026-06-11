@@ -11,6 +11,7 @@ object HangarTimerSyncSources {
     data class SyncCandidate(
         val name: String,
         val anchorSeconds: Long,
+        val anchorLights: List<String>,
         val cycleSeconds: Double,
         val projectedAnchorSeconds: Long = anchorSeconds
     )
@@ -47,12 +48,29 @@ object HangarTimerSyncSources {
         require(matcher.find()) { "未找到 INITIAL_OPEN_TIME" }
         val openAt = parseIsoMillis(matcher.group(1) ?: "")
         require(openAt > 0) { "INITIAL_OPEN_TIME 无效" }
-        val closeDurationMs = parseXyxyllCloseDurationMillis(script)
-        return ((openAt - closeDurationMs) / 1000L)
+        return openAt / 1000L
     }
 
     fun parseXyxyllCycleSeconds(script: String): Double {
         return parseXyxyllCycleDurationMillis(script) / 1000.0
+    }
+
+    fun buildExecTimerCandidate(body: String): SyncCandidate {
+        return SyncCandidate(
+            name = "exectimer",
+            anchorSeconds = parseExecTimerAnchorSeconds(body),
+            anchorLights = listOf("red", "red", "red", "red", "red"),
+            cycleSeconds = parseExecTimerCycleSeconds(body),
+        )
+    }
+
+    fun buildXyxyllCandidate(script: String): SyncCandidate {
+        return SyncCandidate(
+            name = "exec.xyxyll.com",
+            anchorSeconds = parseXyxyllAnchorSeconds(script),
+            anchorLights = listOf("green", "green", "green", "green", "green"),
+            cycleSeconds = parseXyxyllCycleSeconds(script),
+        )
     }
 
     fun chooseClosestToNow(nowSeconds: Long, candidates: List<SyncCandidate>): SyncCandidate {
@@ -81,14 +99,6 @@ object HangarTimerSyncSources {
         val offlineMinutes = extractLong(script, xyxyllOfflineMinutesPattern, "DESIGN_OFFLINE_MIN")
         val driftMillis = extractLong(script, xyxyllCycleDriftPattern, "CYCLE_DRIFT_MS")
         return (onlineMinutes + offlineMinutes) * 60_000L + driftMillis
-    }
-
-    private fun parseXyxyllCloseDurationMillis(script: String): Long {
-        val cycleDurationMs = parseXyxyllCycleDurationMillis(script).toDouble()
-        val onlineMinutes = extractLong(script, xyxyllOnlineMinutesPattern, "DESIGN_ONLINE_MIN").toDouble()
-        val offlineMinutes = extractLong(script, xyxyllOfflineMinutesPattern, "DESIGN_OFFLINE_MIN").toDouble()
-        val designCycleMinutes = onlineMinutes + offlineMinutes
-        return (cycleDurationMs * offlineMinutes / designCycleMinutes).toLong()
     }
 
     private fun extractLong(script: String, pattern: Pattern, label: String): Long {
