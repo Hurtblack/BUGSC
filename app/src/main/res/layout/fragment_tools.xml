@@ -100,7 +100,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:letterSpacing="0.08"
-                    android:text="灯状态计时辅助"
+                    android:text="行政机库倒计时"
                     android:textColor="@color/sc_text"
                     android:textSize="18sp"
                     android:textStyle="bold" />
@@ -121,7 +121,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="灯状态确认、倒计时与分享校准"
+                android:text="灯状态确认、倒计时与双源校准"
                 android:textColor="@color/sc_text_mid"
                 android:textSize="13sp" />
         </LinearLayout>

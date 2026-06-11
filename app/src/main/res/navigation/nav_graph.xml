@@ -81,7 +81,7 @@
     <fragment
         android:id="@+id/HangarTimerFragment"
         android:name="com.euedrc.bugsc.HangarTimerFragment"
-        android:label="灯状态计时辅助"
+        android:label="行政机库倒计时"
         tools:layout="@layout/fragment_hangar_timer" />
 
     <fragment

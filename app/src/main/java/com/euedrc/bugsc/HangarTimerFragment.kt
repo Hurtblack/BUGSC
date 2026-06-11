@@ -94,7 +94,7 @@ class HangarTimerFragment : Fragment() {
         btnMain.setOnClickListener {
             if (isEditMode) confirmEdit() else startEditMode()
         }
-        btnSync.setOnClickListener { syncFromExecTimer() }
+        btnSync.setOnClickListener { syncFromRemoteSources() }
         btnShareCal.setOnClickListener { shareCalibration() }
         btnApplyCal.setOnClickListener { applyCalibration() }
 
@@ -378,18 +378,15 @@ class HangarTimerFragment : Fragment() {
         }
     }
 
-    private fun syncFromExecTimer() {
+    private fun syncFromRemoteSources() {
         if (isEditMode) return
         btnSync.isEnabled = false
         tvSyncInfo.text = "正在同步..."
 
         Thread {
             try {
-                val state = fetchExecTimerState(EXECTIMER_URL)
-                val startTime = parseStartTime(state.optString("startTime", ""))
-                if (startTime <= 0) throw Exception("startTime 字段无效")
-
-                val at = startTime
+                val selection = selectClosestSyncSource()
+                val at = selection.projectedAnchorSeconds
                 val lights = DEFAULT_LIGHTS.toList()
 
                 handler.post {
@@ -397,13 +394,13 @@ class HangarTimerFragment : Fragment() {
                     isEditMode = false
                     btnMain.text = "重置灯状态"
                     tvTip.text = "自动倒计时与自动变灯进行中"
-                    tvSyncInfo.text = "已同步：按5红起点 ${formatTimestamp(at)} 对齐"
+                    tvSyncInfo.text = "已同步：${selection.name}，按最近锚点 ${formatTimestamp(at)} 对齐"
                     setAnchor(lights, at, true)
                     Toast.makeText(requireContext(), "同步成功", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: java.net.UnknownHostException) {
                 handler.post {
-                    tvSyncInfo.text = "同步失败：无法解析域名 exectimer.com"
+                    tvSyncInfo.text = "同步失败：无法解析同步源域名"
                     Toast.makeText(requireContext(), "域名无法解析，请检查网络", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: java.net.SocketTimeoutException) {
@@ -432,31 +429,45 @@ class HangarTimerFragment : Fragment() {
         }.start()
     }
 
-    private fun fetchExecTimerState(url: String): JSONObject {
+    private fun selectClosestSyncSource(): HangarTimerSyncSources.SyncCandidate {
+        val nowSeconds = System.currentTimeMillis() / 1000
+        val candidates = mutableListOf<HangarTimerSyncSources.SyncCandidate>()
+
+        runCatching {
+            val body = fetchText(EXECTIMER_URL)
+            candidates += HangarTimerSyncSources.SyncCandidate(
+                name = "exectimer",
+                anchorSeconds = HangarTimerSyncSources.parseExecTimerAnchorSeconds(body),
+                cycleSeconds = HangarTimerSyncSources.parseExecTimerCycleSeconds(body)
+            )
+        }
+
+        runCatching {
+            val script = fetchText(XYXYLL_APP_JS_URL)
+            candidates += HangarTimerSyncSources.SyncCandidate(
+                name = "exec.xyxyll.com",
+                anchorSeconds = HangarTimerSyncSources.parseXyxyllAnchorSeconds(script),
+                cycleSeconds = HangarTimerSyncSources.parseXyxyllCycleSeconds(script)
+            )
+        }
+
+        if (candidates.isEmpty()) {
+            throw IllegalStateException("两个同步源都不可用")
+        }
+        return HangarTimerSyncSources.chooseClosestToNow(nowSeconds, candidates)
+    }
+
+    private fun fetchText(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
             conn.requestMethod = "GET"
-            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Accept", "*/*")
             if (conn.responseCode != 200) throw Exception("同步源返回异常(${conn.responseCode})")
-            val body = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-            return JSONObject(body)
+            return BufferedReader(InputStreamReader(conn.inputStream)).readText()
         } finally {
             conn.disconnect()
-        }
-    }
-
-    private fun parseStartTime(raw: String): Long {
-        val trimmed = raw.trim()
-        if (trimmed.isEmpty()) return -1
-        val num = trimmed.toLongOrNull()
-        if (num != null) return if (num > 1e12) num / 1000 else num
-        return try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
-            sdf.parse(trimmed)?.time?.div(1000) ?: -1
-        } catch (e: Exception) {
-            -1
         }
     }
 
@@ -535,5 +546,6 @@ class HangarTimerFragment : Fragment() {
         private const val KEY_RULE_VERSION = "ruleVersion"
 
         private const val EXECTIMER_URL = "https://exectimer.com/timer-state.json"
+        private const val XYXYLL_APP_JS_URL = "https://exec.xyxyll.com/app.js"
     }
 }
