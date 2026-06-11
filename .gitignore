@@ -25,3 +25,14 @@ tools/.cache/
 *.keystore
 keystore.properties
 docs/superpowers/plans/
+
+# Cloudflare 部署相关一律不入库（wrangler 凭据/日志含 OAuth token）
+cloudflare/
+
+# Kotlin 编译器错误日志 / 编辑器临时文件
+.kotlin/
+*.swp
+
+# 本地工具与内部文档，不上传（用户要求）
+.codex/
+docs/cloudflare-analytics.md
