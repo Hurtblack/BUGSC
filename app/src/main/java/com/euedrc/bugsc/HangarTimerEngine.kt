@@ -51,6 +51,31 @@ object HangarTimerEngine {
         }
     }
 
+    fun nextOpenAtSeconds(
+        anchors: List<String>,
+        anchorAt: Long,
+        nowSeconds: Long,
+        redToGreenSeconds: Long,
+        greenToGraySeconds: Long,
+        allGrayHoldSeconds: Long,
+        defaultLights: List<String>,
+    ): Long {
+        val elapsed = maxOf(0L, nowSeconds - anchorAt)
+        val current = computeStateByElapsed(
+            anchors = anchors,
+            elapsed = elapsed,
+            redToGreenSeconds = redToGreenSeconds,
+            greenToGraySeconds = greenToGraySeconds,
+            allGrayHoldSeconds = allGrayHoldSeconds,
+            defaultLights = defaultLights,
+        )
+        return if (current.phase == 'A') {
+            nowSeconds + current.remainingSeconds
+        } else {
+            nowSeconds + current.remainingSeconds + (defaultLights.count { it == "red" } * redToGreenSeconds)
+        }
+    }
+
     fun resolvePhase(lights: List<String>): Char = when {
         lights.any { it == "red" } -> 'A'
         else -> 'B'

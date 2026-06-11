@@ -266,7 +266,7 @@
                 android:layout_height="wrap_content"
                 android:backgroundTint="@color/sc_accent"
                 android:letterSpacing="0.1"
-                android:text="重置灯状态"
+                android:text="添加闹钟"
                 android:textColor="@color/sc_ink"
                 android:textSize="15sp" />
 

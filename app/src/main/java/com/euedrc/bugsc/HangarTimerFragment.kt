@@ -3,16 +3,20 @@ package com.euedrc.bugsc
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
+import android.widget.EditText
+import android.provider.AlarmClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import com.euedrc.bugsc.analytics.AnalyticsTracker
 import org.json.JSONObject
@@ -27,8 +31,6 @@ import java.util.Locale
 class HangarTimerFragment : Fragment() {
 
     private val lights = MutableList(5) { "red" }
-    private val draftLights = MutableList(5) { "red" }
-    private var isEditMode = false
     private var anchorLights = listOf("red", "red", "red", "red", "red")
     private var anchorAt: Long = 0
     private var hasConfirmed = false
@@ -47,7 +49,7 @@ class HangarTimerFragment : Fragment() {
     private lateinit var tvTip: TextView
     private lateinit var lightsContainer: LinearLayout
     private lateinit var lightViews: List<FrameLayout>
-    private lateinit var btnMain: Button
+    private lateinit var btnAlarm: Button
     private lateinit var btnSync: Button
     private lateinit var etCalibrationInput: EditText
     private lateinit var btnShareCal: Button
@@ -79,7 +81,7 @@ class HangarTimerFragment : Fragment() {
         tvSyncInfo = view.findViewById(R.id.tv_sync_info)
         tvTip = view.findViewById(R.id.tv_tip)
         lightsContainer = view.findViewById(R.id.lights_row)
-        btnMain = view.findViewById(R.id.btn_main)
+        btnAlarm = view.findViewById(R.id.btn_main)
         btnSync = view.findViewById(R.id.btn_sync)
         etCalibrationInput = view.findViewById(R.id.et_calibration_input)
         btnShareCal = view.findViewById(R.id.btn_share_cal)
@@ -89,12 +91,9 @@ class HangarTimerFragment : Fragment() {
             lightsContainer.getChildAt(i) as FrameLayout
         }
 
-        lightViews.forEachIndexed { index, frame ->
-            frame.setOnClickListener { onLightTap(index) }
-        }
-
-        btnMain.setOnClickListener {
-            if (isEditMode) confirmEdit() else startEditMode()
+        btnAlarm.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("hangar_timer", "set_alarm")
+            showAlarmOptions()
         }
         btnSync.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("hangar_timer", "sync_remote")
@@ -108,43 +107,12 @@ class HangarTimerFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (!isEditMode) startTimer()
+        startTimer()
     }
 
     override fun onPause() {
         super.onPause()
         stopTimer()
-    }
-
-    private fun startEditMode() {
-        stopTimer()
-        isEditMode = true
-        for (i in 0 until 5) draftLights[i] = lights[i]
-        renderLights(draftLights, editable = true)
-        btnMain.text = "确认灯状态"
-        tvTip.text = "点击灯切换状态，倒计时与自动变灯已暂停"
-    }
-
-    private fun confirmEdit() {
-        val confirmed = draftLights.toList()
-        if (!validateLights(confirmed)) {
-            Toast.makeText(requireContext(), "仅支持全红/全绿/全灰/红绿/绿灰组合", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        confirmedAt = System.currentTimeMillis() / 1000
-        isEditMode = false
-        for (i in 0 until 5) lights[i] = confirmed[i]
-        persistAnchor(confirmed, confirmedAt)
-        setAnchor(confirmed, confirmedAt, true)
-        btnMain.text = "重置灯状态"
-        tvTip.text = "自动倒计时与自动变灯进行中"
-    }
-
-    private fun onLightTap(index: Int) {
-        if (!isEditMode) return
-        draftLights[index] = nextColor(draftLights[index])
-        renderLights(draftLights, editable = true)
     }
 
     private fun loadAnchor() {
@@ -172,7 +140,7 @@ class HangarTimerFragment : Fragment() {
             this.confirmedAt = anchorAt
         }
         refreshByNow()
-        if (!isEditMode) startTimer()
+        startTimer()
     }
 
     private fun persistAnchor(lights: List<String>, at: Long) {
@@ -187,7 +155,7 @@ class HangarTimerFragment : Fragment() {
         stopTimer()
         val runnable = object : Runnable {
             override fun run() {
-                if (!isEditMode) refreshByNow()
+                refreshByNow()
                 handler.postDelayed(this, 1000)
             }
         }
@@ -208,7 +176,7 @@ class HangarTimerFragment : Fragment() {
         val presentation = phasePresentation(phase)
 
         for (i in 0 until 5) lights[i] = result.lights[i]
-        renderLights(lights, editable = isEditMode)
+        renderLights(lights, editable = false)
 
         tvPhase.text = phaseLabel(phase)
         tvHangarHint.text = presentation.text
@@ -220,7 +188,7 @@ class HangarTimerFragment : Fragment() {
         tvHelper.text = if (hasConfirmed) {
             "锚点时间：${formatTimestamp(confirmedAt)}"
         } else {
-            "当前为默认基准模式（DEFAULT_BASE_TIME=1735689600），建议先手动确认一次灯状态"
+            "当前为默认基准模式，建议先同步时间或使用校准码对齐"
         }
     }
 
@@ -278,7 +246,7 @@ class HangarTimerFragment : Fragment() {
     }
 
     private fun shareCalibration() {
-        if (isEditMode || !hasConfirmed) {
+        if (!hasConfirmed) {
             Toast.makeText(requireContext(), "请先确认一次灯状态后再分享", Toast.LENGTH_SHORT).show()
             return
         }
@@ -348,8 +316,6 @@ class HangarTimerFragment : Fragment() {
             }
 
             persistAnchor(calLights, anchorAt)
-            isEditMode = false
-            btnMain.text = "重置灯状态"
             tvTip.text = "自动倒计时与自动变灯进行中"
             setAnchor(calLights, anchorAt, true)
 
@@ -360,7 +326,6 @@ class HangarTimerFragment : Fragment() {
     }
 
     private fun syncFromRemoteSources() {
-        if (isEditMode) return
         btnSync.isEnabled = false
         tvSyncInfo.text = "正在同步..."
 
@@ -372,8 +337,6 @@ class HangarTimerFragment : Fragment() {
 
                 handler.post {
                     persistAnchor(lights, at)
-                    isEditMode = false
-                    btnMain.text = "重置灯状态"
                     tvTip.text = "自动倒计时与自动变灯进行中"
                     tvSyncInfo.text = "已同步：${selection.name}，按最近锚点 ${formatTimestamp(at)} 对齐"
                     setAnchor(lights, at, true)
@@ -456,10 +419,72 @@ class HangarTimerFragment : Fragment() {
         return false
     }
 
-    private fun nextColor(color: String): String = when (color) {
-        "red" -> "green"
-        "green" -> "gray"
-        else -> "red"
+    private fun showAlarmOptions() {
+        val options = arrayOf("提前 5 分钟", "提前 30 分钟", "自定义分钟数")
+        AlertDialog.Builder(requireContext())
+            .setTitle("行政机库闹钟")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> setHangarAlarm(5)
+                    1 -> setHangarAlarm(30)
+                    else -> showCustomAlarmDialog()
+                }
+            }
+            .show()
+    }
+
+    private fun showCustomAlarmDialog() {
+        val input = EditText(requireContext()).apply {
+            hint = "输入提前分钟数"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("自定义提前时间")
+            .setView(input)
+            .setPositiveButton("确定") { _, _ ->
+                val minutes = input.text.toString().trim().toIntOrNull()
+                if (minutes == null || minutes < 0) {
+                    Toast.makeText(requireContext(), "请输入有效分钟数", Toast.LENGTH_SHORT).show()
+                } else {
+                    setHangarAlarm(minutes)
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    private fun setHangarAlarm(leadMinutes: Int) {
+        val nowSeconds = System.currentTimeMillis() / 1000
+        val nextOpenAt = HangarTimerEngine.nextOpenAtSeconds(
+            anchors = anchorLights,
+            anchorAt = anchorAt,
+            nowSeconds = nowSeconds,
+            redToGreenSeconds = RED_TO_GREEN_SECONDS,
+            greenToGraySeconds = GREEN_TO_GRAY_SECONDS,
+            allGrayHoldSeconds = ALL_GRAY_HOLD_SECONDS,
+            defaultLights = DEFAULT_LIGHTS,
+        )
+        val alarmAt = nextOpenAt - leadMinutes * 60L
+        if (alarmAt <= nowSeconds) {
+            Toast.makeText(requireContext(), "提前时间过长，已错过本次闹钟", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val date = Date(alarmAt * 1000)
+        val hour = SimpleDateFormat("H", Locale.getDefault()).format(date).toInt()
+        val minute = SimpleDateFormat("m", Locale.getDefault()).format(date).toInt()
+        val alarmIntent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+            putExtra(AlarmClock.EXTRA_MESSAGE, "行政机库闹钟")
+            putExtra(AlarmClock.EXTRA_HOUR, hour)
+            putExtra(AlarmClock.EXTRA_MINUTES, minute)
+            putExtra(AlarmClock.EXTRA_SKIP_UI, false)
+        }
+        runCatching { startActivity(alarmIntent) }
+            .onSuccess {
+                Toast.makeText(requireContext(), "已发送闹钟设置：提前${leadMinutes}分钟，请在时钟中确认", Toast.LENGTH_SHORT).show()
+            }
+            .onFailure {
+                Toast.makeText(requireContext(), "无法打开系统闹钟：${it.javaClass.simpleName}", Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun phaseLabel(phase: Char): String = when (phase) {
