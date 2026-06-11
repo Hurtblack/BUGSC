@@ -15,7 +15,7 @@ class ScmMarketClient {
             .append("&pageSize=").append(pageSize)
             .append("&creatorType=").append(creatorType)
         if (keyword.isNotBlank()) {
-            sb.append("&keyword=").append(URLEncoder.encode(keyword, "UTF-8"))
+            sb.append("&itemName=").append(URLEncoder.encode(keyword, "UTF-8"))
         }
         return parsePage(JSONObject(httpGet(sb.toString())))
     }
