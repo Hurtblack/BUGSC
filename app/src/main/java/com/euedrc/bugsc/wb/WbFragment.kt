@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +45,7 @@ class WbFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        AnalyticsTracker.get(requireContext()).trackPageView("daily_wb")
         repo = WbRepository(requireContext())
         btnSync = view.findViewById(R.id.btn_wb_sync)
         tvUpdated = view.findViewById(R.id.tv_wb_updated)
@@ -69,6 +71,7 @@ class WbFragment : Fragment() {
 
     /** 同步：禁用按钮 → IO 拉远程 → 刷新 → toast。 */
     private fun sync() {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("daily_wb", "refresh")
         btnSync.isEnabled = false
         btnSync.text = "同步中"
         viewLifecycleOwner.lifecycleScope.launch {

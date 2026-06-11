@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.Fragment
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -59,6 +60,7 @@ class HangarTimerFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        AnalyticsTracker.get(requireContext()).trackPageView("hangar_timer")
         prefs = requireContext().getSharedPreferences("hangar_timer", Context.MODE_PRIVATE)
 
         statusBanner = view.findViewById(R.id.status_banner)
@@ -94,7 +96,10 @@ class HangarTimerFragment : Fragment() {
         btnMain.setOnClickListener {
             if (isEditMode) confirmEdit() else startEditMode()
         }
-        btnSync.setOnClickListener { syncFromRemoteSources() }
+        btnSync.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("hangar_timer", "sync_remote")
+            syncFromRemoteSources()
+        }
         btnShareCal.setOnClickListener { shareCalibration() }
         btnApplyCal.setOnClickListener { applyCalibration() }
 
@@ -220,43 +225,19 @@ class HangarTimerFragment : Fragment() {
     }
 
     private fun computeStateByElapsed(anchors: List<String>, elapsed: Long): TimerState {
-        var current = anchors.toMutableList()
-        var remaining = elapsed
-
-        while (true) {
-            val phase = resolvePhase(current)
-            val phaseTotal = phaseTotalSeconds(current, phase)
-
-            if (remaining >= phaseTotal) {
-                current = advanceWholePhase(current, phase)
-                remaining -= phaseTotal
-                continue
-            }
-
-            if (phase == 'A') {
-                val passed = (remaining / RED_TO_GREEN_SECONDS).toInt()
-                current = applyTransitions(current, "red", "green", passed)
-            } else if (phase == 'B') {
-                val passed = (remaining / GREEN_TO_GRAY_SECONDS).toInt()
-                current = applyTransitions(current, "green", "gray", passed)
-            }
-
-            return TimerState(current.toList(), resolvePhase(current), phaseTotal - remaining)
-        }
+        val state = HangarTimerEngine.computeStateByElapsed(
+            anchors = anchors,
+            elapsed = elapsed,
+            redToGreenSeconds = RED_TO_GREEN_SECONDS,
+            greenToGraySeconds = GREEN_TO_GRAY_SECONDS,
+            allGrayHoldSeconds = ALL_GRAY_HOLD_SECONDS,
+            defaultLights = DEFAULT_LIGHTS,
+        )
+        return TimerState(state.lights, state.phase, state.remainingSeconds)
     }
 
     private fun advanceWholePhase(lights: MutableList<String>, phase: Char): MutableList<String> {
-        return when (phase) {
-            'A' -> {
-                val redCount = lights.count { it == "red" }
-                applyTransitions(lights, "red", "green", redCount)
-            }
-            'B' -> {
-                val greenCount = lights.count { it == "green" }
-                applyTransitions(lights, "green", "gray", greenCount)
-            }
-            else -> DEFAULT_LIGHTS.toMutableList()
-        }
+        return HangarTimerEngine.advanceWholePhase(lights, phase, DEFAULT_LIGHTS)
     }
 
     private fun applyTransitions(lights: MutableList<String>, from: String, to: String, steps: Int): MutableList<String> {
@@ -272,16 +253,16 @@ class HangarTimerFragment : Fragment() {
         return result
     }
 
-    private fun resolvePhase(lights: List<String>): Char = when {
-        lights.any { it == "red" } -> 'A'
-        lights.any { it == "green" } -> 'B'
-        else -> 'C'
-    }
+    private fun resolvePhase(lights: List<String>): Char = HangarTimerEngine.resolvePhase(lights)
 
     private fun phaseTotalSeconds(lights: List<String>, phase: Char): Long = when (phase) {
-        'A' -> lights.count { it == "red" }.toLong() * RED_TO_GREEN_SECONDS
-        'B' -> lights.count { it == "green" }.toLong() * GREEN_TO_GRAY_SECONDS
-        else -> ALL_GRAY_HOLD_SECONDS
+        else -> HangarTimerEngine.phaseTotalSeconds(
+            lights = lights,
+            phase = phase,
+            redToGreenSeconds = RED_TO_GREEN_SECONDS,
+            greenToGraySeconds = GREEN_TO_GRAY_SECONDS,
+            allGrayHoldSeconds = ALL_GRAY_HOLD_SECONDS,
+        )
     }
 
     private fun renderLights(lightList: List<String>, editable: Boolean) {
@@ -483,14 +464,12 @@ class HangarTimerFragment : Fragment() {
 
     private fun phaseLabel(phase: Char): String = when (phase) {
         'A' -> "机库关闭"
-        'B' -> "机库开启"
-        else -> "机库初始化"
+        else -> "机库开启"
     }
 
     private fun phasePresentation(phase: Char): PhaseInfo = when (phase) {
         'A' -> PhaseInfo("关闭", "#7a2233")
-        'B' -> PhaseInfo("开启", "#166534")
-        else -> PhaseInfo("初始化中", "#1b3145")
+        else -> PhaseInfo("开启", "#166534")
     }
 
     private fun formatDuration(totalSeconds: Long): String {

@@ -29,6 +29,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.navOptions
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.ui.MobiGlasBottomBar
 import com.euedrc.bugsc.ui.MobiGlasItem
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_IGNORED_VERSION = "ignored_update_version"
 
         /** 协议版本号：协议有重大变更时 +1，触发重新征求同意 */
-        private const val LEGAL_VERSION = 1
+        private const val LEGAL_VERSION = 2
     }
 
     // 底部栏四个顶层目的地，顺序与 items 一致
@@ -69,12 +70,17 @@ class MainActivity : AppCompatActivity() {
         // 选中项 & 显隐由目的地变化驱动
         var selectedIndex by mutableIntStateOf(0)
         var barVisible by mutableStateOf(true)
+        var lastTrackedDestinationId by mutableIntStateOf(-1)
 
         navController.addOnDestinationChangedListener { _, destination, _ ->
             val idx = topLevel.indexOf(destination.id)
             if (idx >= 0) {
                 selectedIndex = idx
                 barVisible = true
+                if (destination.id != lastTrackedDestinationId) {
+                    pageNameForDestination(destination.id)?.let { analytics().trackPageView(it) }
+                    lastTrackedDestinationId = destination.id
+                }
             } else {
                 // 钻进二级页时隐藏底部栏，避免遮挡
                 barVisible = false
@@ -118,8 +124,9 @@ class MainActivity : AppCompatActivity() {
     private fun showConsentDialog(prefs: SharedPreferences) {
         val message = SpannableStringBuilder(
             "欢迎使用 SCMobiGlas。\n\n本应用不收集、不上传任何个人信息，" +
-                "RSI 账号登录仅在您的设备本地完成，登录信息仅作本地缓存，" +
-                "无任何后台上传行为。\n\n使用前请阅读并同意 ",
+                "RSI 账号登录仅在您的设备本地完成，登录信息仅作本地缓存。" +
+                "同时，本应用会上传匿名使用统计（如页面访问、功能点击、应用版本与随机安装标识），" +
+                "不包含账号、Cookie、搜索内容等个人敏感信息，用于改进功能。\n\n使用前请阅读并同意 ",
         )
         appendLegalLink(message, "《用户协议》", LegalDocs.AGREEMENT, "用户协议")
         message.append(" 与 ")
@@ -170,6 +177,7 @@ class MainActivity : AppCompatActivity() {
     /** 启动后台静默检查更新，失败静默忽略；新版本且未被忽略时弹窗 */
     private fun autoCheckUpdate(prefs: SharedPreferences) {
         lifecycleScope.launch {
+            analytics().trackAppOpen()
             val release = withContext(Dispatchers.IO) {
                 runCatching { AppUpdateClient().fetchLatestRelease() }.getOrNull()
             } ?: return@launch
@@ -196,5 +204,15 @@ class MainActivity : AppCompatActivity() {
                 popUpTo(graph.startDestinationId) { saveState = true }
             },
         )
+    }
+
+    private fun analytics(): AnalyticsTracker = AnalyticsTracker.get(this)
+
+    private fun pageNameForDestination(destId: Int): String? = when (destId) {
+        R.id.ToolsFragment -> "tools"
+        R.id.NewsFragment -> "news"
+        R.id.QueryFragment -> "query"
+        R.id.ProfileFragment -> "profile"
+        else -> null
     }
 }

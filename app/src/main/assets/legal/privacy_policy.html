@@ -11,11 +11,17 @@ a{color:#58a6ff}ul{padding-left:18px}.muted{color:#8b949e;font-size:12px}
 </head>
 <body>
 <h1>SCMobiGlas 隐私政策</h1>
-<p class="muted">更新日期：2026-06-10　生效日期：2026-06-10</p>
-<p>SCMobiGlas（以下简称"本应用"）由 SCM 组织维护（个人开发者开发）。我们深知个人信息的重要性，本政策向您说明本应用如何处理您的信息。<strong>核心原则：本应用自身不收集、不存储、不上传您的任何个人信息。</strong></p>
+<p class="muted">更新日期：2026-06-11　生效日期：2026-06-11</p>
+<p>SCMobiGlas（以下简称"本应用"）由 SCM 组织维护（个人开发者开发）。我们深知个人信息的重要性，本政策向您说明本应用如何处理您的信息。<strong>核心原则：本应用不上传您的账号、密码、Cookie、搜索内容等个人敏感信息；为改进功能，会上传最小化的匿名使用统计。</strong></p>
 
 <h2>一、我们收集的信息</h2>
-<p>本应用不主动收集任何个人信息，不接入任何第三方统计、广告或推送 SDK。</p>
+<p>本应用不接入广告或推送 SDK，不上传 RSI 账号相关凭据。为了解功能使用情况并改进体验，本应用会上传以下<strong>匿名使用统计</strong>：</p>
+<ul>
+<li>页面访问（如工具页、资讯页、查询页、个人页）；</li>
+<li>关键功能点击（如资讯打开原文、机库同步、每日 WB 刷新等）；</li>
+<li>应用版本号、事件时间戳、随机生成的安装标识（install id）。</li>
+</ul>
+<p>上述统计不包含账号、密码、Cookie、搜索关键词、输入内容或其他可直接识别您身份的信息。</p>
 
 <h2>二、RSI 账号登录说明</h2>
 <p>部分功能（如库存查看、问题议会）需要您登录 Star Citizen 官方网站（robertsspaceindustries.com）账号。<strong>登录功能仅作本地会话缓存之用，不存在任何后台采集或上传行为。</strong>本应用未架设、亦不运营任何自有服务器，不具备接收用户数据的后台设施；登录过程完全在您设备本地的网页视图（WebView）中、直接与 RSI 官方网站之间完成：</p>
@@ -34,7 +40,8 @@ a{color:#58a6ff}ul{padding-left:18px}.muted{color:#8b949e;font-size:12px}
 <li><strong>api.github.com / raw.githubusercontent.com</strong>：应用版本更新检查与数据文件下载；</li>
 <li><strong>gitee.com</strong>：应用版本更新检查与下载（备用源）；</li>
 <li><strong>api.uexcorp.uk</strong>：游戏物价等数据查询；</li>
-<li><strong>exectimer.com</strong>：游戏内活动计时数据。</li>
+<li><strong>exectimer.com / exec.xyxyll.com</strong>：游戏内活动计时数据；</li>
+<li><strong>Cloudflare Workers / D1（由开发者维护）</strong>：接收并存储匿名使用统计事件。</li>
 </ul>
 
 <h2>四、权限说明</h2>
@@ -45,7 +52,7 @@ a{color:#58a6ff}ul{padding-left:18px}.muted{color:#8b949e;font-size:12px}
 </ul>
 
 <h2>五、数据存储</h2>
-<p>应用的设置项、缓存数据均仅保存在您设备本地，不会上传。</p>
+<p>应用的设置项、缓存数据主要保存在您设备本地。匿名使用统计会发送到开发者部署在 Cloudflare 上的接口，并存入 Cloudflare D1 数据库，用于查看使用量、常用页面和功能热度。</p>
 
 <h2>六、未成年人保护</h2>
 <p>本应用不面向未满 14 周岁的未成年人。若您是未成年人，请在监护人指导下使用。</p>

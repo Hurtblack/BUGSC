@@ -17,6 +17,9 @@ android {
         versionCode = 4
         versionName = "1.0.3"
 
+        val analyticsUrl = providers.gradleProperty("BUGSC_ANALYTICS_URL").orNull ?: ""
+        buildConfigField("String", "ANALYTICS_URL", "\"$analyticsUrl\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -54,6 +57,7 @@ android {
     buildFeatures {
         viewBinding = true
         compose = true
+        buildConfig = true
     }
     applicationVariants.all {
         outputs.all {
