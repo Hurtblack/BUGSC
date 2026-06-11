@@ -11,6 +11,7 @@ import android.widget.*
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.euedrc.bugsc.ImageLoader
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
@@ -162,6 +163,16 @@ class MarketFragment : Fragment() {
             }
         }
 
+        if (order.thumbnailUrl.isNotBlank()) {
+            val thumb = ImageView(requireContext()).apply {
+                layoutParams = LinearLayout.LayoutParams(84.dp, 84.dp).apply { marginEnd = 12.dp }
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundResource(R.drawable.card_bg_blue)
+            }
+            card.addView(thumb)
+            ImageLoader.load(this, thumb, order.thumbnailUrlHd.ifBlank { order.thumbnailUrl })
+        }
+
         val textArea = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             orientation = LinearLayout.VERTICAL
@@ -169,8 +180,23 @@ class MarketFragment : Fragment() {
 
         textArea.addView(cardText(order.itemName, "#d8eaf2", 15f, bold = true))
 
-        val priceStr = "¤ ${formatPrice(order.unitPrice)}  ×${order.remainingQuantity}"
-        textArea.addView(cardText(priceStr, "#21d4ff", 13f, topMarginDp = 4))
+        val priceRow = LinearLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = 4.dp }
+            orientation = LinearLayout.HORIZONTAL
+        }
+        priceRow.addView(cardText("¤ ${formatPrice(order.unitPrice)} aUEC", "#21d4ff", 13f).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        priceRow.addView(cardText("×${order.remainingQuantity}", "#7c95a8", 13f).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
+        })
+        textArea.addView(priceRow)
 
         val metaLine = buildList {
             add(order.nickname)
