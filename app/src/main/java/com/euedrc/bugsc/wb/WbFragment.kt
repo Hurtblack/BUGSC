@@ -1,7 +1,6 @@
 package com.euedrc.bugsc.wb
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
@@ -19,13 +18,12 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.euedrc.bugsc.ImageLoader
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -116,7 +114,12 @@ class WbFragment : Fragment() {
             setBackgroundColor(ContextCompat.getColor(ctx, R.color.sc_bg_deep))
         }
         card.addView(thumb)
-        loadThumb(thumb, item.thumbnail)
+        ImageLoader.load(
+            fragment = this,
+            imageView = thumb,
+            url = item.thumbnail,
+            headers = mapOf("Referer" to "https://robertsspaceindustries.com/"),
+        )
 
         // 文字列
         val col = LinearLayout(ctx).apply {
@@ -163,30 +166,6 @@ class WbFragment : Fragment() {
         col.addView(priceRow)
         card.addView(col)
         return card
-    }
-
-    /** 沿用 app 现有网络图片加载方式（HttpURLConnection + BitmapFactory）。 */
-    private fun loadThumb(view: ImageView, url: String?) {
-        if (url.isNullOrBlank()) return
-        view.tag = url
-        viewLifecycleOwner.lifecycleScope.launch {
-            val bmp = withContext(Dispatchers.IO) {
-                runCatching {
-                    val conn = URL(url).openConnection() as HttpURLConnection
-                    conn.connectTimeout = 10_000
-                    conn.readTimeout = 10_000
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                    conn.setRequestProperty("Referer", "https://robertsspaceindustries.com/")
-                    try {
-                        if (conn.responseCode !in 200..299) return@runCatching null
-                        BitmapFactory.decodeStream(conn.inputStream)
-                    } finally {
-                        conn.disconnect()
-                    }
-                }.getOrNull()
-            }
-            if (view.tag == url && bmp != null) view.setImageBitmap(bmp)
-        }
     }
 
     private fun showStatus(msg: String) {
