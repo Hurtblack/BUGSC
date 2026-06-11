@@ -15,6 +15,12 @@ QQ群：330941212
     <td align="center"><img src="screenshots/screenshot_query.jpg" width="200"/><br/>查询</td>
     <td align="center"><img src="screenshots/screenshot_profile.jpg" width="200"/><br/>个人信息</td>
   </tr>
+  <tr>
+    <td align="center"><img src="screenshots/screenshot_market.jpg" width="200"/><br/>SCM 市场</td>
+    <td align="center"><img src="screenshots/screenshot_market_detail.jpg" width="200"/><br/>订单详情</td>
+    <td align="center"><img src="screenshots/screenshot_news.jpg" width="200"/><br/>资讯</td>
+    <td></td>
+  </tr>
 </table>
 
 > **当前数据对应游戏版本：Alpha 4.8.1**
@@ -23,13 +29,15 @@ QQ群：330941212
 
 ## 功能模块
 
-底部三栏导航，进入默认在「工具」页：
+底部四栏导航，进入默认在「工具」页：
 
 | Tab | 模块 | 状态 | 说明 |
 |---|---|---|---|
 | **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
-| **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exectimer.com） |
+| **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exectimer.com），支持按下次开门时间提前 N 分钟一键添加系统闹钟 |
 | **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价 / 购买链接 |
+| **资讯** | 资讯 | ONLINE | citizenwiki 新闻接口直连，资讯列表 + 关键词搜索，点击跳转原文 |
+| **查询** | SCM 市场 | MARKET | flowcld SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
 | **查询** | 任务搜索 | 4.8.1 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
 | **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算 |
@@ -79,6 +87,15 @@ app/src/main/
 │   │   ├── WbFragment.kt             # 每日 WB 列表页
 │   │   ├── WbRepository.kt           # 本地缓存 + 远程同步
 │   │   └── WbRemoteClient.kt         # 手机端匿名抓取 RSI 官网 WB 数据
+│   ├── market/
+│   │   ├── ScmMarketClient.kt        # flowcld SCM 市场 API 客户端
+│   │   ├── MarketOrder.kt            # 订单/商品数据模型
+│   │   ├── MarketFragment.kt         # 市场列表页（出售/求购/搜索）
+│   │   └── MarketDetailFragment.kt   # 订单详情页
+│   ├── news/
+│   │   ├── NewsFragment.kt           # 资讯列表页（含关键词搜索）
+│   │   └── NewsRepository.kt         # citizenwiki 新闻接口
+│   ├── ImageLoader.kt           # 通用图片加载（内存缓存，WB/资讯/市场共用）
 │   ├── RsiInventoryClient.kt    # RSI 库存 HTTP 客户端
 │   ├── RsiCookieStore.kt        # RSI Session Cookie 管理
 │   ├── RsiWebViewSetup.kt       # WebView 登录桥
