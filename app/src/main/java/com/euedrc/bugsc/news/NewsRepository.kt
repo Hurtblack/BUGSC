@@ -17,6 +17,10 @@ class NewsRepository(
         return client.fetchNewsPage(pageNumber = 1)
     }
 
+    fun fetchRemoteFirstPage(searchText: String): List<NewsClient.NewsItem> {
+        return client.fetchNewsPage(pageNumber = 1, searchText = searchText)
+    }
+
     fun saveFirstPage(items: List<NewsClient.NewsItem>, cachedAt: Long = System.currentTimeMillis()): Unit {
         prefs.edit()
             .putString(KEY_FIRST_PAGE_CACHE, NewsCacheCodec.encode(items, cachedAt))

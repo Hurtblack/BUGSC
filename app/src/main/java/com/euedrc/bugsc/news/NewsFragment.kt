@@ -1,9 +1,9 @@
 package com.euedrc.bugsc.news
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.text.TextUtils
 import android.text.format.DateUtils
 import android.util.TypedValue
@@ -13,18 +13,19 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Button
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.euedrc.bugsc.ImageLoader
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -33,8 +34,11 @@ class NewsFragment : Fragment() {
 
     private lateinit var repo: NewsRepository
 
+    private lateinit var etSearch: EditText
+    private lateinit var btnSearch: Button
     private lateinit var tvStatus: TextView
     private lateinit var container: LinearLayout
+    private var currentQuery: String = ""
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?,
@@ -43,8 +47,19 @@ class NewsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         repo = NewsRepository(requireContext())
+        etSearch = view.findViewById(R.id.et_news_search)
+        btnSearch = view.findViewById(R.id.btn_news_search)
         tvStatus = view.findViewById(R.id.tv_news_status)
         container = view.findViewById(R.id.container_news_list)
+        btnSearch.setOnClickListener { submitSearch() }
+        etSearch.setOnEditorActionListener { _, _, event ->
+            if (event == null || event.keyCode == KeyEvent.KEYCODE_ENTER) {
+                submitSearch()
+                true
+            } else {
+                false
+            }
+        }
         val cached = repo.loadCachedFirstPage()
         if (cached != null && cached.items.isNotEmpty()) {
             render(cached.items)
@@ -57,16 +72,17 @@ class NewsFragment : Fragment() {
     }
 
     private fun refreshFirstPage() {
+        val query = currentQuery.trim()
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    repo.fetchRemoteFirstPage()
+                    if (query.isEmpty()) repo.fetchRemoteFirstPage() else repo.fetchRemoteFirstPage(query)
                 }
             }
             result.onSuccess { items ->
-                val currentItems = repo.loadCachedFirstPage()?.items
-                repo.saveFirstPage(items)
-                if (currentItems != items) {
+                val currentItems = if (query.isEmpty()) repo.loadCachedFirstPage()?.items else null
+                if (query.isEmpty()) repo.saveFirstPage(items)
+                if (query.isNotEmpty() || currentItems != items) {
                     render(items)
                 }
             }.onFailure {
@@ -76,6 +92,15 @@ class NewsFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun submitSearch() {
+        currentQuery = etSearch.text.toString().trim()
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("news", "search")
+        tvStatus.visibility = View.VISIBLE
+        tvStatus.text = if (currentQuery.isEmpty()) "正在拉取最新资讯..." else "正在搜索“$currentQuery”..."
+        container.removeAllViews()
+        refreshFirstPage()
     }
 
     private fun render(items: List<NewsClient.NewsItem>) {
@@ -114,7 +139,7 @@ class NewsFragment : Fragment() {
                 background = ContextCompat.getDrawable(ctx, R.drawable.card_bg_blue)
             }
             card.addView(thumb)
-            loadThumb(thumb, item.thumbnailUrl)
+            ImageLoader.load(this, thumb, item.thumbnailUrl, headers = mapOf("Accept" to "image/*,*/*"))
         }
 
         val content = LinearLayout(ctx).apply {
@@ -199,29 +224,6 @@ class NewsFragment : Fragment() {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }.onFailure {
             toast("无法打开链接")
-        }
-    }
-
-    private fun loadThumb(view: ImageView, url: String?) {
-        if (url.isNullOrBlank()) return
-        view.tag = url
-        viewLifecycleOwner.lifecycleScope.launch {
-            val bmp = withContext(Dispatchers.IO) {
-                runCatching {
-                    val conn = URL(url).openConnection() as HttpURLConnection
-                    conn.connectTimeout = 10_000
-                    conn.readTimeout = 10_000
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                    conn.setRequestProperty("Accept", "image/*,*/*")
-                    try {
-                        if (conn.responseCode !in 200..299) return@runCatching null
-                        BitmapFactory.decodeStream(conn.inputStream)
-                    } finally {
-                        conn.disconnect()
-                    }
-                }.getOrNull()
-            }
-            if (view.tag == url && bmp != null) view.setImageBitmap(bmp)
         }
     }
 

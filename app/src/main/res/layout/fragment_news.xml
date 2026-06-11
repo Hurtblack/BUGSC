@@ -37,6 +37,38 @@
             android:textColor="@color/sc_text_mid"
             android:textSize="13sp" />
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/et_news_search"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="@drawable/input_bg"
+                android:hint="搜索新闻标题 / 摘要…"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btn_news_search"
+                style="?android:attr/buttonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/sc_accent"
+                android:text="搜索"
+                android:textColor="@color/sc_ink"
+                android:textSize="14sp" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tv_news_status"
             android:layout_width="match_parent"
