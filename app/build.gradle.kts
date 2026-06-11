@@ -14,8 +14,8 @@ android {
         applicationId = "com.euedrc.bugsc"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
 
         val analyticsUrl = providers.gradleProperty("BUGSC_ANALYTICS_URL").orNull ?: ""
         buildConfigField("String", "ANALYTICS_URL", "\"$analyticsUrl\"")
