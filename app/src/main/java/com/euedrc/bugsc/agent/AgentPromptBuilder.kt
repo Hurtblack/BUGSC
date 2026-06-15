@@ -6,6 +6,8 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
         userText: String,
         history: List<AgentMessage>,
         skillResults: List<SkillResult>,
+        skillCards: List<AgentSkillCard> = emptyList(),
+        toolResults: List<AgentToolResult> = emptyList(),
     ): List<DeepSeekMessage> {
         val system = buildString {
             appendLine("你是 ${profile.displayName} (${profile.codename})。")
@@ -31,10 +33,45 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             messages += DeepSeekMessage(role, sanitize(msg.content))
         }
         messages += DeepSeekMessage("user", sanitize(userText))
+        if (skillCards.isNotEmpty()) {
+            messages += DeepSeekMessage("system", sanitize(formatSkillCards(skillCards)))
+        }
+        if (toolResults.isNotEmpty()) {
+            messages += DeepSeekMessage("system", sanitize(formatToolResults(toolResults)))
+        }
         if (skillResults.isNotEmpty()) {
             messages += DeepSeekMessage("system", sanitize(formatSkillResults(skillResults)))
         }
         return messages
+    }
+
+    private fun formatSkillCards(cards: List<AgentSkillCard>): String = buildString {
+        appendLine("已选择的 Skill 工作流：")
+        cards.forEach { card ->
+            appendLine("Skill 工作流：${card.id}")
+            appendLine("标题：${card.title}")
+            appendLine("流程：${card.workflow}")
+            if (card.preferredTools.isNotEmpty()) {
+                appendLine("工具策略：${card.preferredTools.joinToString(" -> ")}")
+            }
+        }
+    }
+
+    private fun formatToolResults(results: List<AgentToolResult>): String = buildString {
+        appendLine("工具执行记录：")
+        results.forEach { result ->
+            appendLine("- Tool: ${result.call.tool}")
+            if (result.call.args.isNotEmpty()) {
+                appendLine("  参数: ${result.call.args.entries.joinToString { "${it.key}=${it.value}" }}")
+            }
+            if (result.call.reason.isNotBlank()) appendLine("  原因: ${result.call.reason}")
+            if (result.summary.isNotBlank()) appendLine("  摘要: ${result.summary}")
+            if (result.error != null) appendLine("  错误: ${result.error}")
+            result.facts.forEach { fact -> appendLine("  ${fact.label}: ${fact.value}") }
+            if (result.sources.isNotEmpty()) {
+                appendLine("  来源: ${result.sources.joinToString { it.name }}")
+            }
+        }
     }
 
     private fun formatSkillResults(results: List<SkillResult>): String = buildString {

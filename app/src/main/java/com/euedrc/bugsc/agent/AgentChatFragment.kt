@@ -105,23 +105,13 @@ class AgentChatFragment : Fragment() {
 
     private fun buildRuntime(): AgentRuntime {
         val index = localProvider.entityIndex()
-        val registry = AgentSkillRegistry(
-            listOf(
-                AgentSelfSkill(profile),
-                ShipSkill(localProvider),
-                MiningSkill(localProvider),
-                BlueprintSkill(localProvider),
-                MissionSkill(localProvider),
-                WikeloSkill(localProvider),
-                GlobalSearchSkill(index),
-            ),
-        )
         return AgentRuntime(
             analyzer = QueryAnalyzer(index),
-            skillRegistry = registry,
             promptBuilder = AgentPromptBuilder(profile),
             deepSeekClient = DeepSeekClient(UrlConnectionDeepSeekTransport()),
             settingsProvider = { settingsStore.settings() },
+            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
+            toolRegistry = AgentToolRegistry(AgentLocalSearchTools.create(localProvider, index)),
         )
     }
 
