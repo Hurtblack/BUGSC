@@ -49,6 +49,20 @@ class QueryAnalyzerTest {
     }
 
     @Test
+    fun shortItemCodeMatchesBlueprintEntityName() {
+        val query = QueryAnalyzer(
+            AgentEntityIndex(
+                entries = listOf(
+                    AgentEntity("blueprint", "M7A Cannon", "M7A Cannon", listOf("M7A Cannon")),
+                ),
+            ),
+        ).analyze("m7a的蓝图怎么做")
+
+        assertEquals(AgentIntent.BLUEPRINT, query.intents.first().intent)
+        assertTrue(query.entities.any { it.type == "blueprint" && it.value == "M7A Cannon" })
+    }
+
+    @Test
     fun identityAndPrivacyQuestionMatchesSelfHelpFirst() {
         val query = analyzer.analyze("你是谁？我的 Key 会上传吗？")
 

@@ -10,10 +10,7 @@ class QueryAnalyzer(private val entityIndex: AgentEntityIndex = AgentEntityIndex
     }
 
     fun normalize(value: String): String = value
-        .lowercase()
-        .replace(Regex("""[，。？！?！、,.;；:：()\[\]{}"'“”‘’]"""), " ")
-        .replace(Regex("""\s+"""), " ")
-        .trim()
+        .let(AgentAliasNormalizer::normalize)
 
     private fun scoreIntents(text: String): List<ScoredIntent> {
         val scores = linkedMapOf(
@@ -35,10 +32,16 @@ class QueryAnalyzer(private val entityIndex: AgentEntityIndex = AgentEntityIndex
     private fun score(text: String, vararg keywords: String): Int =
         keywords.count { text.contains(it.lowercase()) }
 
-    private fun findEntities(text: String): List<ScoredEntity> =
-        entityIndex.entries.mapNotNull { entity ->
-            val matchedAlias = entity.aliases.firstOrNull { alias ->
-                alias.isNotBlank() && text.contains(alias.lowercase())
+    private fun findEntities(text: String): List<ScoredEntity> {
+        val compactText = AgentAliasNormalizer.compact(text)
+        return entityIndex.entries.mapNotNull { entity ->
+            val expandedAliases = AgentAliasNormalizer.expandAliases(
+                entity.displayName,
+                entity.value,
+                *entity.aliases.toTypedArray(),
+            )
+            val matchedAlias = expandedAliases.firstOrNull { alias ->
+                alias.isNotBlank() && (text.contains(alias) || compactText.contains(alias.replace(" ", "")))
             }
             matchedAlias?.let {
                 ScoredEntity(
@@ -49,4 +52,5 @@ class QueryAnalyzer(private val entityIndex: AgentEntityIndex = AgentEntityIndex
                 )
             }
         }.sortedByDescending { it.score }
+    }
 }

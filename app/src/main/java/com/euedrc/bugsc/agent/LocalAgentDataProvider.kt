@@ -2,6 +2,7 @@ package com.euedrc.bugsc.agent
 
 import android.content.Context
 import com.euedrc.bugsc.blueprint.BlueprintDataRepository
+import com.euedrc.bugsc.blueprint.CodexTranslations
 import com.euedrc.bugsc.blueprint.ScCraftIndexEntry
 import com.euedrc.bugsc.mining.MiningRepository
 import com.euedrc.bugsc.shipfit.ShipCard
@@ -14,6 +15,7 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
     private val ships: List<ShipCard> by lazy { ShipFitDataRepository(appContext).loadShips() }
     private val mining: MiningRepository by lazy { MiningRepository.get(appContext) }
     private val blueprint: BlueprintDataRepository by lazy { BlueprintDataRepository(appContext) }
+    private val blueprintTranslations: CodexTranslations by lazy { blueprint.loadTranslations() }
     private val wikelo: WikeloRepository by lazy { WikeloRepository.get(appContext) }
     private val materialAliases: AgentMaterialAliasIndex by lazy { AgentMaterialAliasIndex(mining.elements.values.toList()) }
     private val cachedEntityIndex: AgentEntityIndex by lazy { buildEntityIndex() }
@@ -28,7 +30,7 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                         type = "ship",
                         value = ship.id,
                         displayName = ship.zhName ?: ship.name,
-                        aliases = listOfNotNull(ship.id, ship.name, ship.zhName),
+                        aliases = AgentAliasNormalizer.expandAliases(ship.id, ship.name, ship.zhName),
                     ),
                 )
             }
@@ -38,7 +40,7 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                         type = "mining_element",
                         value = element.guid,
                         displayName = element.displayName,
-                        aliases = listOfNotNull(
+                        aliases = AgentAliasNormalizer.expandAliases(
                             element.nameEn,
                             AgentMaterialAliasIndex.baseMaterialName(element.nameEn),
                             element.nameCn,
@@ -48,12 +50,17 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                 )
             }
             blueprint.loadScCraftIndex().take(250).forEach { item ->
+                val nameCn = translationFor(item.nameEn)
                 add(
                     AgentEntity(
                         type = "blueprint",
                         value = item.nameEn,
-                        displayName = item.nameEn,
-                        aliases = listOf(item.nameEn) + item.materials.take(8),
+                        displayName = nameCn ?: item.nameEn,
+                        aliases = AgentAliasNormalizer.expandAliases(
+                            item.nameEn,
+                            nameCn,
+                            *item.materials.take(8).toTypedArray(),
+                        ),
                     ),
                 )
             }
@@ -63,13 +70,16 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                         type = "wikelo_trade",
                         value = trade.nameEn,
                         displayName = trade.nameCn,
-                        aliases = listOfNotNull(trade.nameCn, trade.nameEn, trade.rewardItem),
+                        aliases = AgentAliasNormalizer.expandAliases(trade.nameCn, trade.nameEn, trade.rewardItem),
                     ),
                 )
             }
         }
         return AgentEntityIndex(entries)
     }
+
+    private fun translationFor(nameEn: String): String? =
+        blueprintTranslations.itemName(nameEn)
 
     override suspend fun search(query: AgentQuery): List<AgentSearchHit> {
         val intent = query.intents.firstOrNull()?.intent ?: AgentIntent.UNKNOWN
@@ -142,18 +152,21 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
             .take(3)
             .map { (entry, score) ->
                 val missions = blueprint.loadMissionsForBlueprint(entry.nameEn).take(3)
+                val displayName = displayItemName(entry.nameEn)
+                val materialNames = entry.materials.take(5).joinToString(" / ") { displayItemName(it) }
                 AgentSearchHit(
                     summary = buildString {
-                        append(entry.nameEn).append(" 蓝图")
+                        append(displayName).append(" 蓝图")
                         if (entry.category.isNotBlank()) append("，分类 ").append(entry.category)
-                        if (entry.materials.isNotEmpty()) append("，材料 ").append(entry.materials.take(5).joinToString(" / "))
+                        if (entry.materials.isNotEmpty()) append("，材料 ").append(materialNames)
                         if (missions.isNotEmpty()) append("，来源任务 ").append(missions.joinToString(" / ") { it.displayTitle })
                     },
                     facts = listOfNotNull(
-                        AgentFact("蓝图", entry.nameEn),
+                        AgentFact("蓝图", displayName),
+                        translationFor(entry.nameEn)?.let { AgentFact("英文名", entry.nameEn) },
                         entry.category.takeIf { it.isNotBlank() }?.let { AgentFact("分类", it) },
                         AgentFact("制作时间", "${entry.craftTimeSeconds}s"),
-                        AgentFact("材料", entry.materials.take(6).joinToString(" / ")),
+                        AgentFact("材料", entry.materials.take(6).joinToString(" / ") { displayItemName(it) }),
                         missions.firstOrNull()?.let { AgentFact("任务来源", it.displayTitle) },
                     ),
                     sources = listOf(AgentSource("blueprint assets", "local", entry.nameEn)),
@@ -162,10 +175,21 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
             }.toList()
 
     private fun blueprintScore(query: AgentQuery, entry: ScCraftIndexEntry): Int {
-        val directScore = matchScore(query, entry.nameEn, entry.category, *entry.materials.toTypedArray())
+        val translatedMaterials = entry.materials.mapNotNull(::translationFor)
+        val directScore = matchScore(
+            query,
+            entry.nameEn,
+            translationFor(entry.nameEn),
+            entry.category,
+            *entry.materials.toTypedArray(),
+            *translatedMaterials.toTypedArray(),
+        )
         val aliasScore = if (entry.materials.any { materialAliases.matches(it, query.normalizedText) }) 10 else 0
         return directScore + aliasScore
     }
+
+    private fun displayItemName(nameEn: String): String =
+        translationFor(nameEn)?.takeIf { it != nameEn }?.let { "$it / $nameEn" } ?: nameEn
 
     private fun searchMissions(query: AgentQuery): List<AgentSearchHit> =
         blueprint.loadAllMissions().asSequence()
