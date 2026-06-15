@@ -1,7 +1,6 @@
 package com.euedrc.bugsc
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -12,6 +11,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.core.net.toUri
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +23,7 @@ class ToolsFragment : Fragment() {
 
     private val statusClient = RsiStatusClient()
     private var cardBug: LinearLayout? = null
+    private var cardAgent: LinearLayout? = null
     private var cardTimer: LinearLayout? = null
     private var cardWb: LinearLayout? = null
     private var cardRepair: LinearLayout? = null
@@ -37,6 +38,7 @@ class ToolsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        cardAgent = view.findViewById(R.id.card_agent)
         cardBug = view.findViewById(R.id.card_bug)
         cardTimer = view.findViewById(R.id.card_timer)
         cardWb = view.findViewById(R.id.card_wb)
@@ -46,6 +48,10 @@ class ToolsFragment : Fragment() {
         tvStatusPuDot = view.findViewById(R.id.tv_status_pu_dot)
         tvStatusAcDot = view.findViewById(R.id.tv_status_ac_dot)
 
+        cardAgent?.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "agent_assistant")
+            findNavController().navigate(R.id.AgentChatFragment)
+        }
         cardBug?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "bug_list")
             findNavController().navigate(R.id.BugListFragment)
@@ -65,7 +71,7 @@ class ToolsFragment : Fragment() {
         cardComing?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "more_tools")
             runCatching {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SCM_TOOLS_URL)))
+                startActivity(Intent(Intent.ACTION_VIEW, SCM_TOOLS_URL.toUri()))
             }.onFailure {
                 Toast.makeText(requireContext(), "无法打开浏览器", Toast.LENGTH_SHORT).show()
             }
@@ -76,6 +82,7 @@ class ToolsFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        cardAgent = null
         cardBug = null
         cardTimer = null
         cardWb = null

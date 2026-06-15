@@ -1,4 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SCMobiGlas</string>
+    <string name="agent_header_title">AGENT // MODEL</string>
+    <string name="agent_deepseek_settings_title">DeepSeek 设置</string>
+    <string name="agent_api_key_label">API Key</string>
+    <string name="agent_api_key_hint">sk-...</string>
+    <string name="agent_model_flash">deepseek-v4-flash</string>
+    <string name="agent_model_pro">deepseek-v4-pro</string>
+    <string name="agent_test_connection">测试连接</string>
+    <string name="agent_save">保存</string>
+    <string name="agent_settings">设置模型</string>
+    <string name="agent_input_hint">询问船只、矿物、蓝图、任务…</string>
+    <string name="agent_input_config_hint">请先设置 DeepSeek API Key</string>
+    <string name="agent_send">发送</string>
+    <string name="agent_status_deepseek">本地 Agent · DeepSeek</string>
+    <string name="agent_settings_saved">已保存 DeepSeek 设置</string>
+    <string name="agent_test_success">上次连接测试成功</string>
+    <string name="agent_test_failure">上次连接测试失败</string>
+    <string name="agent_test_not_tested">尚未测试连接</string>
+    <string name="agent_test_running">连接测试中…</string>
+    <string name="agent_request_failed">Agent 请求失败</string>
+    <string name="tool_scmbot_title">SCMBOT</string>
+    <string name="tool_scmbot_tag">AGENT</string>
+    <string name="tool_scmbot_desc">资料检索、蓝图、矿物、任务与行动建议</string>
 </resources>

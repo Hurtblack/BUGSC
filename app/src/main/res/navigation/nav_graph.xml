@@ -209,6 +209,18 @@
         tools:layout="@layout/fragment_chat_conversations" />
 
     <fragment
+        android:id="@+id/AgentChatFragment"
+        android:name="com.euedrc.bugsc.agent.AgentChatFragment"
+        android:label="SCMBOT"
+        tools:layout="@layout/fragment_agent_chat" />
+
+    <fragment
+        android:id="@+id/AgentSettingsFragment"
+        android:name="com.euedrc.bugsc.agent.AgentSettingsFragment"
+        android:label="DeepSeek 设置"
+        tools:layout="@layout/fragment_agent_settings" />
+
+    <fragment
         android:id="@+id/RsiLoginFragment"
         android:name="com.euedrc.bugsc.RsiLoginFragment"
         android:label="RSI 登录"

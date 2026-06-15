@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hud_screen_bg"
+    tools:ignore="Overdraw">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:letterSpacing="0.2"
+            android:text="@string/agent_header_title"
+            android:textColor="@color/sc_accent"
+            android:textSize="11sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/agent_deepseek_settings_title"
+            android:textColor="@color/sc_text"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/agent_api_key_label"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/et_agent_api_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/input_bg"
+                android:hint="@string/agent_api_key_hint"
+                android:importantForAutofill="no"
+                android:inputType="textPassword"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <RadioGroup
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/rb_agent_model_flash"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/agent_model_flash"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_agent_model_pro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agent_model_pro"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/tv_agent_setting_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:fontFamily="monospace"
+                android:textColor="@color/sc_text_dim"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="end"
+                android:orientation="horizontal"
+                tools:ignore="ButtonStyle">
+
+                <Button
+                    android:id="@+id/btn_agent_test"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/button_outline_accent"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="9dp"
+                    android:text="@string/agent_test_connection"
+                    android:textAllCaps="false"
+                    android:textColor="@color/sc_accent" />
+
+                <Button
+                    android:id="@+id/btn_agent_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:background="@drawable/button_inventory_primary"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="18dp"
+                    android:paddingVertical="9dp"
+                    android:text="@string/agent_save"
+                    android:textAllCaps="false"
+                    android:textColor="@color/sc_ink"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
