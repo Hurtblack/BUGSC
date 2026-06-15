@@ -40,6 +40,9 @@ class QueryFragment : Fragment() {
         binding.cardMining.setOnClickListener {
             findNavController().navigate(R.id.MiningFragment)
         }
+        binding.cardInventory.setOnClickListener {
+            findNavController().navigate(R.id.InventoryFragment)
+        }
     }
 
     override fun onDestroyView() {

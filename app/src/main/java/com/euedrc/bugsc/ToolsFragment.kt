@@ -25,6 +25,7 @@ class ToolsFragment : Fragment() {
     private var cardBug: LinearLayout? = null
     private var cardTimer: LinearLayout? = null
     private var cardWb: LinearLayout? = null
+    private var cardRepair: LinearLayout? = null
     private var cardComing: LinearLayout? = null
     private var tvStatusPlatformDot: TextView? = null
     private var tvStatusPuDot: TextView? = null
@@ -39,6 +40,7 @@ class ToolsFragment : Fragment() {
         cardBug = view.findViewById(R.id.card_bug)
         cardTimer = view.findViewById(R.id.card_timer)
         cardWb = view.findViewById(R.id.card_wb)
+        cardRepair = view.findViewById(R.id.card_repair)
         cardComing = view.findViewById(R.id.card_coming)
         tvStatusPlatformDot = view.findViewById(R.id.tv_status_platform_dot)
         tvStatusPuDot = view.findViewById(R.id.tv_status_pu_dot)
@@ -55,6 +57,10 @@ class ToolsFragment : Fragment() {
         cardWb?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "daily_wb")
             findNavController().navigate(R.id.WbFragment)
+        }
+        cardRepair?.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "character_repair")
+            findNavController().navigate(R.id.CharacterRepairFragment)
         }
         cardComing?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "more_tools")
@@ -73,6 +79,7 @@ class ToolsFragment : Fragment() {
         cardBug = null
         cardTimer = null
         cardWb = null
+        cardRepair = null
         cardComing = null
         tvStatusPlatformDot = null
         tvStatusPuDot = null
@@ -103,7 +110,7 @@ class ToolsFragment : Fragment() {
     private fun statusColor(level: ServiceStatusLevel): Int {
         val colorRes = when (level) {
             ServiceStatusLevel.OPERATIONAL -> R.color.sc_ok
-            ServiceStatusLevel.DEGRADED -> R.color.sc_warn
+            ServiceStatusLevel.DEGRADED -> R.color.sc_purple
             ServiceStatusLevel.OUTAGE -> R.color.sc_danger
         }
         return ContextCompat.getColor(requireContext(), colorRes)
