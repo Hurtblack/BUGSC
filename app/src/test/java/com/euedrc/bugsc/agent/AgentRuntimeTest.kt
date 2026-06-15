@@ -40,7 +40,7 @@ class AgentRuntimeTest {
 
         val answer = runtime.answer("石英蓝图怎么弄")
 
-        assertTrue(answer.contains("本地资料没有命中"))
+        assertTrue(answer.contains("没有查到"))
         assertFalse(answer.contains("<search>"))
     }
 

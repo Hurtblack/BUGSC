@@ -56,9 +56,35 @@ private class GlobalIndexTool(
     override val description: String = "本地索引查询"
 
     override suspend fun run(call: AgentToolCall): AgentToolResult {
-        val term = call.args["term"].orEmpty().lowercase()
+        val rawTerm = call.args["term"].orEmpty()
+        val normalizedTerm = AgentAliasNormalizer.normalize(rawTerm)
+        val compactTerm = AgentAliasNormalizer.compact(rawTerm)
+        if (normalizedTerm.isBlank()) {
+            return AgentToolResult(
+                call = call,
+                summary = "本地索引未命中相关数据",
+                facts = emptyList(),
+                sources = listOf(AgentSource("App 本地索引", "local")),
+                confidence = 0f,
+            )
+        }
         val hits = entityIndex.entries.filter { entity ->
-            entity.aliases.any { alias -> alias.isNotBlank() && term.contains(alias.lowercase()) }
+            val aliases = AgentAliasNormalizer.expandAliases(
+                entity.displayName,
+                entity.value,
+                *entity.aliases.toTypedArray(),
+            )
+            aliases.any { alias ->
+                val normalizedAlias = AgentAliasNormalizer.normalize(alias)
+                val compactAlias = AgentAliasNormalizer.compact(alias)
+                normalizedAlias.isNotBlank() &&
+                    (
+                        normalizedTerm.contains(normalizedAlias) ||
+                            normalizedAlias.contains(normalizedTerm) ||
+                            compactTerm.contains(compactAlias) ||
+                            compactAlias.contains(compactTerm)
+                        )
+            }
         }.take(GlobalSearchSkill.MAX_RESULTS)
         return AgentToolResult(
             call = call,

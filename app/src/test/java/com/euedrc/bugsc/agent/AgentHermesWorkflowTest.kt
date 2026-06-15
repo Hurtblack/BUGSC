@@ -70,7 +70,7 @@ class AgentHermesWorkflowTest {
         val prompt = (0 until requestJson.getJSONArray("messages").length())
             .joinToString("\n") { requestJson.getJSONArray("messages").getJSONObject(it).getString("content") }
         assertTrue(prompt.contains("Skill 工作流：blueprint-crafting"))
-        assertTrue(prompt.contains("工具执行记录"))
+        assertTrue(prompt.contains("可用工具证据"))
         assertTrue(prompt.contains("search_blueprint"))
         assertTrue(prompt.contains("资料未命中不等于不能回答"))
     }
@@ -94,6 +94,58 @@ class AgentHermesWorkflowTest {
 
         assertTrue(answer.contains("Blueprint evidence"))
         assertTrue(!answer.contains("<search>"))
+    }
+
+    @Test
+    fun unknownWorkflowSearchesAllLocalEvidenceTools() = runBlocking {
+        val tools = listOf(
+            RecordingTool("search_blueprint"),
+            RecordingTool("search_mission"),
+            RecordingTool("search_wikelo"),
+            RecordingTool("search_mining"),
+            RecordingTool("search_ship"),
+            RecordingTool("search_local_index"),
+        )
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
+            toolRegistry = AgentToolRegistry(tools),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
+                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
+                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"按工具结果总结"}}]}""")
+            }),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+        )
+
+        runtime.answer("绝杀")
+
+        val called = tools.filter { it.calls.isNotEmpty() }.map { it.name }.toSet()
+        assertEquals(
+            setOf("search_blueprint", "search_mission", "search_wikelo", "search_mining", "search_ship", "search_local_index"),
+            called,
+        )
+    }
+
+    @Test
+    fun globalIndexMatchesShortChineseAliasInsideTranslatedName() = runBlocking {
+        val registry = AgentToolRegistry(
+            AgentLocalSearchTools.create(
+                provider = object : AgentSearchProvider {
+                    override suspend fun search(query: AgentQuery): List<AgentSearchHit> = emptyList()
+                },
+                entityIndex = AgentEntityIndex(
+                    entries = listOf(
+                        AgentEntity("blueprint", "Killshot Rifle", "绝杀 步枪", listOf("绝杀 步枪", "Killshot Rifle")),
+                    ),
+                ),
+            ),
+        )
+
+        val result = registry.execute(listOf(AgentToolCall("search_local_index", mapOf("term" to "绝杀")))).single()
+
+        assertTrue(result.summary.contains("绝杀 步枪"))
+        assertTrue(result.facts.any { it.value.contains("绝杀 步枪") })
     }
 
     @Test

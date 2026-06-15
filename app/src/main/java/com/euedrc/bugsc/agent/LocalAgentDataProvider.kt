@@ -193,25 +193,39 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
 
     private fun searchMissions(query: AgentQuery): List<AgentSearchHit> =
         blueprint.loadAllMissions().asSequence()
-            .map { it to matchScore(query, it.displayTitle, it.title, it.titleCn, it.missionType, it.missionTypeCn, it.displayFaction, it.displaySystems) }
+            .map { mission ->
+                val blueprintNames = mission.blueprints.flatMap { listOfNotNull(it.nameEn, translationFor(it.nameEn)) }.toTypedArray()
+                mission to matchScore(
+                    query,
+                    mission.displayTitle,
+                    mission.title,
+                    mission.titleCn,
+                    mission.missionType,
+                    mission.missionTypeCn,
+                    mission.displayFaction,
+                    mission.displaySystems,
+                    *blueprintNames,
+                )
+            }
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
             .take(3)
             .map { (mission, score) ->
+                val blueprintNames = mission.blueprints.joinToString(" / ") { displayItemName(it.nameEn) }
                 AgentSearchHit(
                     summary = buildString {
                         append(mission.displayTitle)
                         mission.displayFaction?.let { append("，阵营 ").append(it) }
                         append("，星系 ").append(mission.displaySystems)
                         mission.rewardUec?.let { append("，奖励 ").append(it).append(" aUEC") }
-                        if (mission.blueprints.isNotEmpty()) append("，蓝图 ").append(mission.blueprints.joinToString(" / ") { it.nameEn })
+                        if (mission.blueprints.isNotEmpty()) append("，蓝图 ").append(blueprintNames)
                     },
                     facts = listOfNotNull(
                         AgentFact("任务", mission.displayTitle),
                         mission.displayFaction?.let { AgentFact("阵营", it) },
                         AgentFact("星系", mission.displaySystems),
                         mission.rewardUec?.let { AgentFact("奖励", "$it aUEC") },
-                        mission.blueprints.firstOrNull()?.let { AgentFact("掉落蓝图", it.nameEn) },
+                        mission.blueprints.firstOrNull()?.let { AgentFact("掉落蓝图", displayItemName(it.nameEn)) },
                     ),
                     sources = listOf(AgentSource("mission assets", "local", mission.guid)),
                     confidence = confidence(score),
@@ -220,15 +234,16 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
 
     private fun searchWikelo(query: AgentQuery): List<AgentSearchHit> =
         wikeloMatches(query).take(3).map { trade ->
+            val rewardName = trade.rewardItem?.let(::displayItemName)
             AgentSearchHit(
                 summary = buildString {
                     append(trade.nameCn).append(" / ").append(trade.nameEn)
-                    trade.rewardItem?.let { append("，奖励 ").append(it) }
+                    rewardName?.let { append("，奖励 ").append(it) }
                     if (trade.materials.isNotEmpty()) append("，材料 ").append(trade.materials.joinToString(" / ") { "${it.nameCn}${it.qty ?: ""}${it.unit ?: ""}" })
                 },
                 facts = listOfNotNull(
                     AgentFact("兑换", trade.nameCn),
-                    trade.rewardItem?.let { AgentFact("奖励", it) },
+                    rewardName?.let { AgentFact("奖励", it) },
                     AgentFact("材料", trade.materials.joinToString(" / ") { "${it.nameCn}${it.qty ?: ""}${it.unit ?: ""}" }),
                     trade.reputation.requiredTier?.let { AgentFact("声望等级", it.toString()) },
                 ),
@@ -254,7 +269,25 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
         query.entities
             .filter { it.type == "wikelo_trade" }
             .mapNotNull { entity -> wikelo.allTrades().firstOrNull { it.nameEn == entity.value } }
-            .ifEmpty { wikelo.search(query.normalizedText) }
+            .ifEmpty {
+                wikelo.allTrades().asSequence()
+                    .map { trade ->
+                        trade to matchScore(
+                            query,
+                            trade.nameCn,
+                            trade.nameEn,
+                            trade.rewardItem,
+                            trade.rewardItem?.let(::translationFor),
+                            trade.category,
+                            *trade.materials.map { it.nameCn }.toTypedArray(),
+                        )
+                    }
+                    .filter { it.second > 0 }
+                    .sortedByDescending { it.second }
+                    .map { it.first }
+                    .toList()
+                    .ifEmpty { wikelo.search(query.normalizedText) }
+            }
 
     private fun matchScore(query: AgentQuery, vararg values: String?): Int {
         val tokens = query.normalizedText.split(' ').filter { it.length >= 2 }

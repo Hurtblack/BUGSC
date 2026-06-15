@@ -67,8 +67,8 @@ object AgentSkillCardProvider {
             id = "general-guide",
             title = "游戏攻略分析",
             matchingIntents = setOf(AgentIntent.GUIDE, AgentIntent.UNKNOWN),
-            workflow = "问题没有明确资料库时，先基于语义判断最可能的数据方向；资料不足时给出可执行的排查步骤，不要伪造具体数值。",
-            preferredTools = listOf("search_local_index"),
+            workflow = "问题没有明确资料库时，不要只查索引；同时查询飞船、矿物、蓝图、任务、维科洛和本地索引，把可用证据交给模型汇总。资料不足时给出可执行的排查步骤，不要伪造具体数值。",
+            preferredTools = listOf("search_blueprint", "search_mission", "search_wikelo", "search_mining", "search_ship", "search_local_index"),
         ),
     )
 }

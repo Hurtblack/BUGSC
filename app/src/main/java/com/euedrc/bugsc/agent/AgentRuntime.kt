@@ -57,45 +57,71 @@ class AgentRuntime(
     private fun fallbackAnswer(text: String, results: List<SkillResult>): String {
         val useful = results.filter { it.hasUsefulData() }
         if (useful.isNotEmpty()) {
-            return useful.joinToString("\n\n") { result ->
-                buildString {
-                    append(result.summary)
-                    val facts = result.facts.filter { it.value.isNotBlank() }
-                    if (facts.isNotEmpty()) {
-                        appendLine()
-                        facts.take(8).forEach { appendLine("- ${it.label}: ${it.value}") }
-                    }
-                    if (result.sources.isNotEmpty()) {
-                        append("来源：")
-                        append(result.sources.joinToString { it.name })
-                    }
-                }.trim()
-            }
+            return formatUsefulResults(
+                summaries = useful.map { it.summary },
+                facts = useful.flatMap { it.facts },
+            )
         }
-        val tried = results.map { it.skillId }.distinct().joinToString("、").ifBlank { "本地索引" }
-        return "我在本地资料没有命中“$text”的可靠结果。\n\n已尝试：$tried。\n你可以换一个游戏内英文名、物品完整名称，或补充它属于矿物、蓝图材料、任务奖励还是维科洛兑换；我会按对应资料库再查。"
+        return "没有查到“$text”的可靠资料。\n可以换中文名、英文名或更完整的物品名再试。"
     }
 
     private fun fallbackToolAnswer(text: String, results: List<AgentToolResult>): String {
         val useful = results.filter { it.hasUsefulData() }
         if (useful.isNotEmpty()) {
-            return useful.joinToString("\n\n") { result ->
-                buildString {
-                    append(result.summary)
-                    val facts = result.facts.filter { it.value.isNotBlank() }
-                    if (facts.isNotEmpty()) {
-                        appendLine()
-                        facts.take(8).forEach { appendLine("- ${it.label}: ${it.value}") }
-                    }
-                    if (result.sources.isNotEmpty()) {
-                        append("来源：")
-                        append(result.sources.joinToString { it.name })
-                    }
-                }.trim()
-            }
+            return formatUsefulResults(
+                summaries = useful.map { it.summary },
+                facts = useful.flatMap { it.facts },
+            )
         }
-        val tried = results.map { it.call.tool }.distinct().joinToString("、").ifBlank { "本地工具" }
-        return "我在本地资料没有命中“$text”的可靠结果。\n\n已尝试：$tried。\n你可以补充它属于矿物、蓝图材料、任务奖励、维科洛兑换还是飞船资料；我会按对应工具再查。"
+        return "没有查到“$text”的可靠资料。\n可以换中文名、英文名或更完整的物品名再试。"
+    }
+
+    private fun formatUsefulResults(
+        summaries: List<String>,
+        facts: List<AgentFact>,
+    ): String {
+        val valuesByLabel = facts
+            .filter { it.value.isNotBlank() }
+            .groupBy { it.label }
+            .mapValues { (_, values) -> values.map { it.value }.distinct() }
+        val blueprints = valuesByLabel["蓝图"].orEmpty().take(3)
+        if (blueprints.isNotEmpty()) {
+            return buildString {
+                appendSection("蓝图", blueprints)
+                appendSection("材料", valuesByLabel["材料"].orEmpty().take(3))
+                appendSection("来源", (valuesByLabel["任务来源"].orEmpty() + valuesByLabel["兑换"].orEmpty()).distinct().take(3))
+                val firstSummary = summaries.firstOrNull { it.isNotBlank() }?.lineSequence()?.firstOrNull()?.trim()
+                if (!firstSummary.isNullOrBlank()) appendSection("结论", listOf(firstSummary))
+            }.trim()
+        }
+        val preferred = listOf("矿物", "船只", "任务", "兑换", "奖励", "地点", "推荐查询地点")
+            .flatMap { label -> valuesByLabel[label].orEmpty().take(2).map { label to it } }
+            .take(6)
+        if (preferred.isNotEmpty()) {
+            val headline = summaries
+                .firstOrNull { it.isNotBlank() && !it.contains("未命中") }
+                ?.lineSequence()
+                ?.firstOrNull()
+                ?.trim()
+            return (listOfNotNull(headline) + preferred.map { (label, value) -> "- $label：$value" })
+                .distinct()
+                .take(6)
+                .joinToString("\n")
+        }
+        return summaries
+            .filter { it.isNotBlank() && !it.contains("未命中") }
+            .flatMap { it.lineSequence().map(String::trim).filter(String::isNotBlank).toList() }
+            .distinct()
+            .take(6)
+            .joinToString("\n")
+    }
+
+    private fun StringBuilder.appendSection(title: String, lines: List<String>) {
+        val visible = lines.filter { it.isNotBlank() }.distinct()
+        if (visible.isEmpty()) return
+        if (isNotEmpty()) appendLine().appendLine()
+        appendLine("### $title")
+        visible.forEach { appendLine("- $it") }
     }
 
     private fun SkillResult.hasUsefulData(): Boolean =

@@ -20,8 +20,11 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             appendLine("请使用中文回答，优先依据工具结果。工具结果不足时必须说明不确定，不要编造地点、奖励、价格、材料和版本信息。")
             appendLine("你没有可调用的 search、tool、function 或联网浏览能力；App 已经在调用模型前完成了可用查询。")
             appendLine("不要输出 <search>、<tool>、JSON 工具调用、伪代码查询或“我再查一下”。不能假装正在联网查询、登录查询或后台继续查询。")
-            appendLine("资料未命中不等于不能回答；你可以继续基于游戏常识、问题语义和上下文做分析，但必须明确标注“本地资料未命中，以下是模型推断/建议”。")
-            appendLine("如果用户问“怎么做、怎么弄、材料、蓝图、任务来源”，优先给出排查路径和下一步建议，不要只让用户换关键词。")
+            appendLine("面向中文玩家输出：名称优先用中文；有英文名时只作为“中文 / English”的补充。")
+            appendLine("回答要短，只输出用户问题对应的结论和翻译后的关键资料。不要输出工具名、查询过程、未命中列表、数据源说明或无关建议。")
+            appendLine("如果命中蓝图，按“### 蓝图”“### 材料”“### 来源”“### 结论”组织；没有内容的板块直接省略。")
+            appendLine("每个板块最多 3 条要点；整段回答尽量控制在 10 行以内。")
+            appendLine("资料未命中不等于不能回答；可以基于游戏常识给建议，但必须用一句话标注“本地资料未命中，以下是推断”。")
         }
         val messages = mutableListOf(DeepSeekMessage("system", sanitize(system)))
         history.takeLast(MAX_HISTORY).forEach { msg ->
@@ -58,34 +61,34 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
     }
 
     private fun formatToolResults(results: List<AgentToolResult>): String = buildString {
-        appendLine("工具执行记录：")
-        results.forEach { result ->
-            appendLine("- Tool: ${result.call.tool}")
-            if (result.call.args.isNotEmpty()) {
-                appendLine("  参数: ${result.call.args.entries.joinToString { "${it.key}=${it.value}" }}")
-            }
-            if (result.call.reason.isNotBlank()) appendLine("  原因: ${result.call.reason}")
+        val useful = results.filter { it.hasUsefulData() }
+        val visible = useful.ifEmpty { results.take(3) }
+        appendLine("可用工具证据：")
+        visible.forEach { result ->
+            appendLine("- ${result.call.tool}")
             if (result.summary.isNotBlank()) appendLine("  摘要: ${result.summary}")
-            if (result.error != null) appendLine("  错误: ${result.error}")
-            result.facts.forEach { fact -> appendLine("  ${fact.label}: ${fact.value}") }
-            if (result.sources.isNotEmpty()) {
-                appendLine("  来源: ${result.sources.joinToString { it.name }}")
-            }
+            result.facts.filter { it.value.isNotBlank() }.take(8).forEach { fact -> appendLine("  ${fact.label}: ${fact.value}") }
         }
+        if (useful.isEmpty()) appendLine("没有可靠命中时，最终回答只需简短说明未命中并询问一个可帮助定位的关键词。")
     }
 
     private fun formatSkillResults(results: List<SkillResult>): String = buildString {
-        appendLine("工具查询结果：")
-        results.forEach { result ->
+        val useful = results.filter { it.hasUsefulData() }
+        val visible = useful.ifEmpty { results.take(3) }
+        appendLine("可用查询证据：")
+        visible.forEach { result ->
             appendLine("- Skill: ${result.skillId}")
             if (result.summary.isNotBlank()) appendLine("  摘要: ${result.summary}")
-            if (result.error != null) appendLine("  错误: ${result.error}")
-            result.facts.forEach { fact -> appendLine("  ${fact.label}: ${fact.value}") }
-            if (result.sources.isNotEmpty()) {
-                appendLine("  来源: ${result.sources.joinToString { it.name }}")
-            }
+            result.facts.filter { it.value.isNotBlank() }.take(8).forEach { fact -> appendLine("  ${fact.label}: ${fact.value}") }
         }
+        if (useful.isEmpty()) appendLine("没有可靠命中时，最终回答只需简短说明未命中并询问一个可帮助定位的关键词。")
     }
+
+    private fun AgentToolResult.hasUsefulData(): Boolean =
+        error == null && confidence > 0f && (facts.isNotEmpty() || !summary.contains("未命中"))
+
+    private fun SkillResult.hasUsefulData(): Boolean =
+        error == null && confidence > 0f && (facts.isNotEmpty() || !summary.contains("未命中"))
 
     private fun sanitize(value: String): String {
         var text = value

@@ -29,7 +29,7 @@ class AgentPromptBuilderTest {
         assertTrue(text.contains(profile.displayName))
         assertTrue(text.contains("Quantanium"))
         assertTrue(text.contains("Lyria"))
-        assertTrue(text.contains("mining assets"))
+        assertFalse(text.contains("mining assets"))
         assertTrue(messages.any { it.role == "system" })
         assertTrue(messages.any { it.role == "user" })
     }
