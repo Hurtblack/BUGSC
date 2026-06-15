@@ -340,6 +340,36 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/container_scm_business"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <Button
+                    android:id="@+id/btn_scm_transactions"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_outline_accent"
+                    android:text="我的交易"
+                    android:textAllCaps="false"
+                    android:textColor="@color/sc_accent" />
+
+                <Button
+                    android:id="@+id/btn_scm_messages"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_outline_accent"
+                    android:text="消息"
+                    android:textAllCaps="false"
+                    android:textColor="@color/sc_accent" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/tv_scm_logged_out"
                 android:layout_width="match_parent"

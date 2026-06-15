@@ -1,6 +1,5 @@
 package com.euedrc.bugsc
 
-import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -23,26 +22,6 @@ object HangarTimerSyncSources {
     private val xyxyllOfflineMinutesPattern = Pattern.compile("""DESIGN_OFFLINE_MIN\s*=\s*(\d+)""")
     private val xyxyllCycleDriftPattern = Pattern.compile("""CYCLE_DRIFT_MS\s*=\s*(\d+)""")
 
-    fun parseExecTimerAnchorSeconds(body: String): Long {
-        val parsed = JSONObject(body)
-        val raw = parsed.optLong("startTime", -1L)
-        require(raw > 0) { "startTime 字段无效" }
-        return if (raw > 1_000_000_000_000L) raw / 1000 else raw
-    }
-
-    fun parseExecTimerCycleSeconds(body: String): Double {
-        val parsed = JSONObject(body)
-        val settings = parsed.optJSONObject("adminSettings")
-            ?: throw IllegalArgumentException("adminSettings 字段无效")
-        val powerUpMinutes = settings.optDouble("powerUpDuration", Double.NaN)
-        val powerDownMinutes = settings.optDouble("powerDownDuration", Double.NaN)
-        val cooldownMinutes = settings.optDouble("cooldownDuration", Double.NaN)
-        require(!powerUpMinutes.isNaN() && !powerDownMinutes.isNaN() && !cooldownMinutes.isNaN()) {
-            "adminSettings 时长字段无效"
-        }
-        return powerUpMinutes * 5 * 60 + powerDownMinutes * 5 * 60 + cooldownMinutes * 60
-    }
-
     fun parseXyxyllAnchorSeconds(script: String): Long {
         val matcher = xyxyllOpenTimePattern.matcher(script)
         require(matcher.find()) { "未找到 INITIAL_OPEN_TIME" }
@@ -55,14 +34,7 @@ object HangarTimerSyncSources {
         return parseXyxyllCycleDurationMillis(script) / 1000.0
     }
 
-    fun buildExecTimerCandidate(body: String): SyncCandidate {
-        return SyncCandidate(
-            name = "exectimer",
-            anchorSeconds = parseExecTimerAnchorSeconds(body),
-            anchorLights = listOf("red", "red", "red", "red", "red"),
-            cycleSeconds = parseExecTimerCycleSeconds(body),
-        )
-    }
+    fun buildAuthoritativeCandidate(script: String): SyncCandidate = buildXyxyllCandidate(script)
 
     fun buildXyxyllCandidate(script: String): SyncCandidate {
         return SyncCandidate(

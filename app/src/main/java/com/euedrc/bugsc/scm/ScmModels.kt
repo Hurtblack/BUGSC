@@ -110,6 +110,27 @@ data class AppMemberUserInfoRespVO(
     val orderLimit: Int,
     val groups: List<String>,
 ) {
+    fun toCacheJson(): String = JSONObject()
+        .put("id", id)
+        .put("nickname", nickname)
+        .put("avatar", avatar)
+        .put("email", email)
+        .put("mark", mark)
+        .put("language", language)
+        .put("verifyKeyStatus", verifyKeyStatus)
+        .put("rsiAccurate", rsiAccurate)
+        .put("sponsorLevel", sponsorLevel)
+        .put("sellOrderCount", sellOrderCount)
+        .put("buyOrderCount", buyOrderCount)
+        .put("userMobile", userMobile)
+        .put("createTime", createTime)
+        .put("organization", organization)
+        .put("signInStatus", signInStatus)
+        .put("reputationPoint", reputationPoint)
+        .put("orderLimit", orderLimit)
+        .put("groups", org.json.JSONArray(groups))
+        .toString()
+
     companion object {
         // org.json 的 optString 遇到 JSON null 会返回字符串 "null"，这里统一当空串。
         private fun JSONObject.str(key: String): String = if (isNull(key)) "" else optString(key)
@@ -143,5 +164,32 @@ data class AppMemberUserInfoRespVO(
                 }
             } ?: emptyList(),
         )
+
+        fun parseCache(body: String): AppMemberUserInfoRespVO? = runCatching {
+            val data = JSONObject(body)
+            val groups = data.optJSONArray("groups")?.let { arr ->
+                (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf(String::isNotBlank) }
+            } ?: emptyList()
+            AppMemberUserInfoRespVO(
+                id = data.optLong("id"),
+                nickname = data.str("nickname"),
+                avatar = data.str("avatar"),
+                email = data.str("email"),
+                mark = data.str("mark"),
+                language = data.optInt("language", 0),
+                verifyKeyStatus = data.optInt("verifyKeyStatus", 0),
+                rsiAccurate = if (data.isNull("rsiAccurate")) null else data.optInt("rsiAccurate"),
+                sponsorLevel = data.optInt("sponsorLevel", 0),
+                sellOrderCount = data.optInt("sellOrderCount", 0),
+                buyOrderCount = data.optInt("buyOrderCount", 0),
+                userMobile = data.str("userMobile"),
+                createTime = data.optLong("createTime"),
+                organization = data.str("organization"),
+                signInStatus = data.optInt("signInStatus", 0),
+                reputationPoint = data.optInt("reputationPoint", 0),
+                orderLimit = data.optInt("orderLimit", 0),
+                groups = groups,
+            )
+        }.getOrNull()
     }
 }

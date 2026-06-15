@@ -1,7 +1,10 @@
 package com.euedrc.bugsc
 
+import android.Manifest
 import android.app.AlertDialog
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.text.SpannableStringBuilder
 import android.text.Spannable
@@ -18,11 +21,14 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -30,18 +36,33 @@ import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.navOptions
 import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.chat.ChatClient
+import com.euedrc.bugsc.chat.ChatInboxSocket
+import com.euedrc.bugsc.chat.ChatLauncherBadgeNotifier
+import com.euedrc.bugsc.chat.ChatReconnectPolicy
+import com.euedrc.bugsc.chat.ChatUnreadStore
 import com.euedrc.bugsc.ui.MobiGlasBottomBar
 import com.euedrc.bugsc.ui.MobiGlasItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
+    private var inboxSocket: ChatInboxSocket? = null
+    private var inboxReconnectJob: Job? = null
+    private var inboxConnecting = false
+    private var foreground = false
+    private var reconnectAttempt = 0
+    private val reconnectPolicy = ChatReconnectPolicy()
 
     companion object {
         private const val PREFS_NAME = "scmobiglas_prefs"
         private const val KEY_CONSENT_VERSION = "legal_consent_version"
         private const val KEY_IGNORED_VERSION = "ignored_update_version"
+        private const val REQUEST_NOTIFICATIONS = 91
 
         /** 协议版本号：协议有重大变更时 +1，触发重新征求同意 */
         private const val LEGAL_VERSION = 2
@@ -89,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         composeView.setContent {
+            val unread by ChatUnreadStore.count.collectAsState()
             MaterialTheme(colorScheme = darkColorScheme()) {
                 if (barVisible) {
                     MobiGlasBottomBar(
@@ -99,6 +121,7 @@ class MainActivity : AppCompatActivity() {
                                 navController.navigateTab(topLevel[idx])
                             }
                         },
+                        badgeIndices = if (unread > 0) setOf(3) else emptySet(),
                     )
                 }
             }
@@ -119,6 +142,113 @@ class MainActivity : AppCompatActivity() {
         } else {
             showConsentDialog(prefs)
         }
+
+        lifecycleScope.launch {
+            com.euedrc.bugsc.scm.ScmAuthStore.loginState.collectLatest { loggedIn ->
+                if (loggedIn && foreground) {
+                    startInboxSocket()
+                } else if (!loggedIn) {
+                    stopInboxSocket()
+                    ChatUnreadStore.clear()
+                }
+            }
+        }
+        lifecycleScope.launch {
+            ChatUnreadStore.count.collectLatest { count ->
+                ChatLauncherBadgeNotifier.sync(this@MainActivity, count)
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        foreground = true
+        if (com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) {
+            ensureChatNotificationPermission()
+            lifecycleScope.launch(Dispatchers.IO) { runCatching { ChatUnreadStore.refresh() } }
+            startInboxSocket()
+        }
+    }
+
+    override fun onStop() {
+        foreground = false
+        stopInboxSocket()
+        super.onStop()
+    }
+
+    private fun startInboxSocket() {
+        if (!foreground || !com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn || inboxSocket != null || inboxConnecting) return
+        inboxConnecting = true
+        inboxReconnectJob?.cancel()
+        lifecycleScope.launch {
+            val connection = withContext(Dispatchers.IO) {
+                runCatching {
+                    val ticket = ChatClient.wsTicket() ?: return@runCatching null
+                    ChatClient.resolveWsBaseUrl() to ticket
+                }.getOrNull()
+            } ?: run {
+                inboxConnecting = false
+                scheduleInboxReconnect()
+                return@launch
+            }
+            if (!foreground || !com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) {
+                inboxConnecting = false
+                return@launch
+            }
+            inboxSocket = ChatInboxSocket(
+                onMessage = {
+                    lifecycleScope.launch(Dispatchers.IO) { runCatching { ChatUnreadStore.refresh() } }
+                },
+                onStatus = { connected ->
+                    if (connected) {
+                        reconnectAttempt = 0
+                    } else {
+                        inboxConnecting = false
+                        inboxSocket = null
+                        scheduleInboxReconnect()
+                    }
+                },
+            ).also { socket ->
+                inboxConnecting = false
+                socket.connect(connection.first, connection.second)
+            }
+        }
+    }
+
+    private fun scheduleInboxReconnect() {
+        if (!reconnectPolicy.shouldReconnect(
+                foreground = foreground,
+                loggedIn = com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn,
+                attempt = reconnectAttempt,
+            )
+        ) return
+        val delayMillis = reconnectPolicy.delayMillis(reconnectAttempt++)
+        inboxReconnectJob?.cancel()
+        inboxReconnectJob = lifecycleScope.launch {
+            delay(delayMillis)
+            startInboxSocket()
+        }
+    }
+
+    private fun stopInboxSocket() {
+        inboxReconnectJob?.cancel()
+        inboxReconnectJob = null
+        inboxSocket?.close()
+        inboxSocket = null
+        inboxConnecting = false
+        reconnectAttempt = 0
+    }
+
+    private fun ensureChatNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            REQUEST_NOTIFICATIONS,
+        )
     }
 
     /** 首次启动（或协议版本升级后）弹出，同意前不发起任何网络请求 */

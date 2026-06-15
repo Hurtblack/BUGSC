@@ -160,6 +160,22 @@
     </fragment>
 
     <fragment
+        android:id="@+id/TransactionListFragment"
+        android:name="com.euedrc.bugsc.market.transaction.TransactionListFragment"
+        android:label="我的交易"
+        tools:layout="@layout/fragment_transaction_list" />
+
+    <fragment
+        android:id="@+id/TransactionDetailFragment"
+        android:name="com.euedrc.bugsc.market.transaction.TransactionDetailFragment"
+        android:label="交易详情"
+        tools:layout="@layout/fragment_transaction_detail">
+        <argument
+            android:name="transactionNumber"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
         android:id="@+id/ChatFragment"
         android:name="com.euedrc.bugsc.chat.ChatFragment"
         android:label="聊天"
@@ -173,6 +189,12 @@
             app:argType="string"
             android:defaultValue="" />
     </fragment>
+
+    <fragment
+        android:id="@+id/ChatConversationListFragment"
+        android:name="com.euedrc.bugsc.chat.ChatConversationListFragment"
+        android:label="消息"
+        tools:layout="@layout/fragment_chat_conversations" />
 
     <fragment
         android:id="@+id/RsiLoginFragment"

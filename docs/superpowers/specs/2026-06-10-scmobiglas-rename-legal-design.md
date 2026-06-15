@@ -46,7 +46,7 @@
   - 联系方式：GitHub Issues（https://github.com/Hurtblack/BUGSC/issues）、Gitee Issues（https://gitee.com/hurtblack/BUGSC/issues）+ 邮箱 hurtblack@qq.com
   - 声明：应用本身不收集、不上传任何个人信息；无第三方统计/广告 SDK
   - RSI 账号登录仅在本地 WebView 内完成，登录 Cookie 仅保存在本机，不会发送给开发者
-  - 列出应用访问的第三方服务及用途：robertsspaceindustries.com（账号/库存/商店数据）、issue-council.robertsspaceindustries.com（问题议会）、api.github.com 与 raw.githubusercontent.com（应用更新与数据文件）、gitee.com（应用更新备用源）、api.uexcorp.uk（游戏数据）、exectimer.com（活动计时）
+  - 列出应用访问的第三方服务及用途：robertsspaceindustries.com（账号/库存/商店数据）、issue-council.robertsspaceindustries.com（问题议会）、api.github.com 与 raw.githubusercontent.com（应用更新与数据文件）、gitee.com（应用更新备用源）、api.uexcorp.uk（游戏数据）、exec.xyxyll.com（活动计时）
   - 权限说明：仅 INTERNET 与 ACCESS_NETWORK_STATE
 - `user_agreement.html` 用户协议（简短）：使用规范、按现状提供、责任限制
 - `disclaimer.html` 免责声明：非官方应用，与 Cloud Imperium Games / Roberts Space Industries 无任何关联；Star Citizen® 相关商标与素材归 CIG 所有

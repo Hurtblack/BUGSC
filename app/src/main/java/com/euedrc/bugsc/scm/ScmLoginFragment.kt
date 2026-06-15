@@ -11,6 +11,7 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.euedrc.bugsc.ARG_RETURN_ARGS
 import com.euedrc.bugsc.ARG_RETURN_DEST
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.finishLogin
@@ -58,7 +59,9 @@ class ScmLoginFragment : Fragment() {
         view.findViewById<View>(R.id.btn_register).setOnClickListener {
             findNavController().navigate(
                 R.id.action_ScmLogin_to_ScmRegister,
-                bundleOf(ARG_RETURN_DEST to returnDestId()),
+                bundleOf(ARG_RETURN_DEST to returnDestId()).apply {
+                    arguments?.getBundle(ARG_RETURN_ARGS)?.let { putBundle(ARG_RETURN_ARGS, it) }
+                },
             )
         }
         view.findViewById<View>(R.id.btn_forgot).setOnClickListener {

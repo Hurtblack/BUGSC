@@ -80,4 +80,42 @@ class ScmModelsTest {
         val u = AppMemberUserInfoRespVO.parse(org.json.JSONObject(json))
         assertNull(u.rsiAccurate)
     }
+
+    @Test
+    fun userInfoCacheRoundTripPreservesProfileFields() {
+        val json = """
+            {
+              "id":555,
+              "nickname":"流浪",
+              "avatar":"https://a/x.png",
+              "email":"a@b.com",
+              "mark":"常驻奥里森",
+              "language":0,
+              "verifyKeyStatus":1,
+              "rsiAccurate":1,
+              "sponsorLevel":2,
+              "sellOrderCount":7,
+              "buyOrderCount":3,
+              "userMobile":"123",
+              "createTime":1718000000,
+              "organization":{"name":"SCM"},
+              "signInStatus":1,
+              "achievement":{
+                "point":88,
+                "orderLimit":12,
+                "groups":[{"title":"认证商人"},{"name":"开拓者"}]
+              }
+            }
+        """.trimIndent()
+        val original = AppMemberUserInfoRespVO.parse(org.json.JSONObject(json))
+
+        val cached = AppMemberUserInfoRespVO.parseCache(original.toCacheJson())
+
+        assertEquals(original, cached)
+    }
+
+    @Test
+    fun userInfoCacheRejectsInvalidJson() {
+        assertNull(AppMemberUserInfoRespVO.parseCache("{broken"))
+    }
 }

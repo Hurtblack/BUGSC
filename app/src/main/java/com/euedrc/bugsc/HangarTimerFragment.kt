@@ -375,22 +375,9 @@ class HangarTimerFragment : Fragment() {
 
     private fun selectClosestSyncSource(): HangarTimerSyncSources.SyncCandidate {
         val nowSeconds = System.currentTimeMillis() / 1000
-        val candidates = mutableListOf<HangarTimerSyncSources.SyncCandidate>()
-
-        runCatching {
-            val body = fetchText(EXECTIMER_URL)
-            candidates += HangarTimerSyncSources.buildExecTimerCandidate(body)
-        }
-
-        runCatching {
-            val script = fetchText(XYXYLL_APP_JS_URL)
-            candidates += HangarTimerSyncSources.buildXyxyllCandidate(script)
-        }
-
-        if (candidates.isEmpty()) {
-            throw IllegalStateException("两个同步源都不可用")
-        }
-        return HangarTimerSyncSources.chooseClosestToNow(nowSeconds, candidates)
+        val script = fetchText(XYXYLL_APP_JS_URL)
+        val candidate = HangarTimerSyncSources.buildAuthoritativeCandidate(script)
+        return HangarTimerSyncSources.chooseClosestToNow(nowSeconds, listOf(candidate))
     }
 
     private fun fetchText(url: String): String {
@@ -541,7 +528,6 @@ class HangarTimerFragment : Fragment() {
         private const val KEY_CONFIRMED_AT = "confirmedAt"
         private const val KEY_RULE_VERSION = "ruleVersion"
 
-        private const val EXECTIMER_URL = "https://exectimer.com/timer-state.json"
         private const val XYXYLL_APP_JS_URL = "https://exec.xyxyll.com/app.js"
     }
 }

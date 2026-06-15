@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.databinding.FragmentProfileBinding
+import com.euedrc.bugsc.chat.ChatUnreadStore
 import com.euedrc.bugsc.scm.AppMemberUserInfoRespVO
 import com.euedrc.bugsc.scm.ScmAuthStore
 import com.euedrc.bugsc.scm.ScmClient
@@ -53,6 +54,19 @@ class ProfileFragment : Fragment() {
         }
         binding.btnScmLogout.setOnClickListener { logoutScm() }
         binding.btnScmSignin.setOnClickListener { doSignIn() }
+        binding.btnScmTransactions.setOnClickListener {
+            findNavController().navigate(R.id.TransactionListFragment)
+        }
+        binding.btnScmMessages.setOnClickListener {
+            findNavController().navigate(R.id.ChatConversationListFragment)
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            ChatUnreadStore.count.collect { count ->
+                if (_binding != null) {
+                    binding.btnScmMessages.text = if (count > 0) "消息 ($count)" else "消息"
+                }
+            }
+        }
 
         binding.tvVersion.text = "v${currentVersionName()}"
         binding.rowPrivacy.setOnClickListener { navigateLegal(LegalDocs.PRIVACY, "隐私政策") }
@@ -151,8 +165,17 @@ class ProfileFragment : Fragment() {
         binding.tvScmLoggedOut.visibility = if (loggedIn) View.GONE else View.VISIBLE
         binding.tvScmMark.visibility = View.GONE
         binding.containerScmSignin.visibility = if (loggedIn) View.VISIBLE else View.GONE
+        binding.containerScmBusiness.visibility = if (loggedIn) View.VISIBLE else View.GONE
 
         if (!loggedIn) return
+
+        val userId = ScmAuthStore.session().userId
+        val prefs = scmProfilePrefs()
+        val cached = prefs.getString(scmProfileKey(userId), null)
+            ?.let(AppMemberUserInfoRespVO::parseCache)
+        if (cached != null) {
+            bindScmInfo(cached)
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             val info = withContext(Dispatchers.IO) { runCatching { ScmClient.getUserInfo() }.getOrNull() }
@@ -162,10 +185,18 @@ class ProfileFragment : Fragment() {
                 if (!ScmAuthStore.isLoggedIn) renderScmCard()
                 return@launch
             }
-            bindScmInfo(info)
+            if (info != cached) {
+                prefs.edit().putString(scmProfileKey(info.id), info.toCacheJson()).apply()
+                bindScmInfo(info)
+            }
         }
         loadSignInSummary()
     }
+
+    private fun scmProfilePrefs() =
+        requireContext().getSharedPreferences("scm_profile", Context.MODE_PRIVATE)
+
+    private fun scmProfileKey(userId: Long): String = "profile_$userId"
 
     private fun loadSignInSummary() {
         binding.tvScmSignin.text = "签到信息加载中…"
@@ -308,6 +339,8 @@ class ProfileFragment : Fragment() {
             withContext(Dispatchers.IO) { runCatching { ScmClient.logout() } }
             if (_binding == null) return@launch
             binding.btnScmLogout.isEnabled = true
+            ChatUnreadStore.clear()
+            scmProfilePrefs().edit().clear().apply()
             renderScmCard()
             toast("已退出 SCM 登录")
         }

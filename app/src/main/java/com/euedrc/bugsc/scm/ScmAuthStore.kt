@@ -45,6 +45,7 @@ object ScmAuthStore {
     fun clear() {
         authSession.clear()
         _loginState.value = false
+        com.euedrc.bugsc.chat.ChatUnreadStore.clear()
     }
 
     private fun buildPrefs(context: Context): SharedPreferences {

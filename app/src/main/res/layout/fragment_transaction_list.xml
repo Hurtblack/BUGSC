@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hud_screen_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="monospace"
+        android:text="SCM // MY TRANSACTIONS"
+        android:textColor="@color/sc_accent"
+        android:textSize="11sp" />
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:fillViewport="true"
+        android:overScrollMode="never"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_filter_all"
+                style="?android:attr/buttonStyle"
+                android:layout_width="70dp"
+                android:layout_height="34dp"
+                android:backgroundTint="@color/sc_accent"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="0dp"
+                android:singleLine="true"
+                android:text="全部"
+                android:textAllCaps="false"
+                android:textColor="@color/sc_ink"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_filter_ongoing"
+                style="?android:attr/buttonStyle"
+                android:layout_width="70dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="0dp"
+                android:singleLine="true"
+                android:text="进行中"
+                android:textAllCaps="false"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_filter_completed"
+                style="?android:attr/buttonStyle"
+                android:layout_width="70dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="0dp"
+                android:singleLine="true"
+                android:text="已完成"
+                android:textAllCaps="false"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_filter_cancelled"
+                style="?android:attr/buttonStyle"
+                android:layout_width="70dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="0dp"
+                android:singleLine="true"
+                android:text="已取消"
+                android:textAllCaps="false"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/container_transactions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
+
+    <TextView
+        android:id="@+id/tv_transaction_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="12dp"
+        android:textColor="@color/sc_text_mid" />
+
+    <Button
+        android:id="@+id/btn_transaction_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="加载更多"
+        android:visibility="gone" />
+</LinearLayout>

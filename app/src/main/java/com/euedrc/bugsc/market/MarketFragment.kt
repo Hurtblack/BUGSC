@@ -15,6 +15,7 @@ import com.euedrc.bugsc.ImageLoader
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.ui.ImagePreviewDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,6 +68,7 @@ class MarketFragment : Fragment() {
         }
         btnLoadMore.setOnClickListener { loadMore() }
 
+        updateTabStyle()
         loadFirstPage()
     }
 
@@ -163,14 +165,21 @@ class MarketFragment : Fragment() {
             }
         }
 
-        if (order.thumbnailUrl.isNotBlank()) {
+        val previewUrl = order.thumbnailUrlHd.ifBlank { order.thumbnailUrl }
+        if (previewUrl.isNotBlank()) {
             val thumb = ImageView(requireContext()).apply {
                 layoutParams = LinearLayout.LayoutParams(84.dp, 84.dp).apply { marginEnd = 12.dp }
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setBackgroundResource(R.drawable.card_bg_blue)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    AnalyticsTracker.get(requireContext()).trackFeatureClick("market", "preview_image")
+                    ImagePreviewDialog.show(this@MarketFragment, listOf(previewUrl))
+                }
             }
             card.addView(thumb)
-            ImageLoader.load(this, thumb, order.thumbnailUrlHd.ifBlank { order.thumbnailUrl })
+            ImageLoader.load(this, thumb, previewUrl)
         }
 
         val textArea = LinearLayout(requireContext()).apply {

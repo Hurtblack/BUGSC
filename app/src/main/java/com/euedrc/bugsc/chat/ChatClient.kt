@@ -18,6 +18,33 @@ object ChatClient {
         return parsed.data?.let { ChatConversation.parse(it) }
     }
 
+    fun conversations(limit: Int = 50): List<ChatConversation> {
+        val resp = api().request("GET", "/member/chat/conversations/list?limit=$limit")
+        if (resp.code !in 200..299) throw IllegalStateException("会话列表返回 ${resp.code}")
+        return ChatParser.parseConversations(JSONObject(resp.body))
+    }
+
+    fun unreadCount(): Long {
+        val resp = api().request("GET", "/member/chat/unread/count")
+        if (resp.code !in 200..299) throw IllegalStateException("未读消息接口返回 ${resp.code}")
+        return ChatParser.parseUnread(JSONObject(resp.body))
+    }
+
+    fun publicProfile(userId: Long): ChatPublicProfile {
+        val resp = api().request("GET", "/member/user/get-public?id=$userId")
+        if (resp.code !in 200..299) throw IllegalStateException("公开资料接口返回 ${resp.code}")
+        return ChatParser.parsePublicProfile(JSONObject(resp.body))
+    }
+
+    fun markRead(conversationId: Long) {
+        val resp = api().request("PUT", "/member/chat/conversations/$conversationId/mark-read")
+        if (resp.code !in 200..299) throw IllegalStateException("标记已读返回 ${resp.code}")
+        val json = JSONObject(resp.body)
+        if (json.optInt("code", -1) != 0) {
+            throw IllegalStateException(json.optString("msg").ifBlank { "标记已读失败" })
+        }
+    }
+
     /** 聊天记录（按时间正序返回，便于直接 append 到列表底部）。 */
     fun history(otherUserId: Long, lastMessageId: Long? = null, pageSize: Int = 30): List<ChatMessage> {
         val sb = StringBuilder("/member/chat/messages/history?otherUserId=$otherUserId&pageSize=$pageSize")

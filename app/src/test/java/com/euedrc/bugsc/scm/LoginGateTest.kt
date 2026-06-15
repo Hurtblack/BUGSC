@@ -16,4 +16,10 @@ class LoginGateTest {
         val decision = LoginGate.decide(isLoggedIn = false, returnDestId = 123)
         assertEquals(LoginGate.Decision.Navigate(123), decision)
     }
+
+    @Test
+    fun notLoggedInNavigatesWithReturnDestAndArgumentsFlag() {
+        val decision = LoginGate.decide(isLoggedIn = false, returnDestId = 123, hasReturnArgs = true)
+        assertEquals(LoginGate.Decision.Navigate(123, hasReturnArgs = true), decision)
+    }
 }

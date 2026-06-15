@@ -8,9 +8,9 @@ object LoginGate {
 
     sealed class Decision {
         object Execute : Decision()
-        data class Navigate(val returnDestId: Int) : Decision()
+        data class Navigate(val returnDestId: Int, val hasReturnArgs: Boolean = false) : Decision()
     }
 
-    fun decide(isLoggedIn: Boolean, returnDestId: Int): Decision =
-        if (isLoggedIn) Decision.Execute else Decision.Navigate(returnDestId)
+    fun decide(isLoggedIn: Boolean, returnDestId: Int, hasReturnArgs: Boolean = false): Decision =
+        if (isLoggedIn) Decision.Execute else Decision.Navigate(returnDestId, hasReturnArgs)
 }

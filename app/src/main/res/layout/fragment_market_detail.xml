@@ -228,6 +228,127 @@
             android:textSize="13sp"
             android:visibility="gone" />
 
+        <LinearLayout
+            android:id="@+id/container_transaction_form"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="交易设置"
+                android:textColor="@color/sc_text"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_trade_window_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/sc_warn"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tv_quantity_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="交易数量"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/et_transaction_quantity"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="1"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="收货位置 *"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="12sp" />
+
+            <Spinner
+                android:id="@+id/spinner_system"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:prompt="@string/app_name" />
+
+            <Spinner
+                android:id="@+id/spinner_planet"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:prompt="@string/app_name" />
+
+            <Spinner
+                android:id="@+id/spinner_station"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:prompt="@string/app_name" />
+
+            <TextView
+                android:id="@+id/tv_selected_location"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="请选择收货位置"
+                android:textColor="@color/sc_text_dim"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="运费（UEC）"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/et_shipping_fee"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="请输入运费"
+                android:inputType="numberDecimal"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="收货方式 *"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/tag_bg"
+                android:padding="12dp"
+                android:text="面交"
+                android:textColor="@color/sc_text" />
+
+            <TextView
+                android:id="@+id/tv_transaction_total"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="交易总额（UEC）：0"
+                android:textColor="@color/sc_accent"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <Button
             android:id="@+id/btn_go_market"
             style="?android:attr/buttonStyle"
@@ -237,7 +358,7 @@
             android:backgroundTint="@color/sc_accent"
             android:gravity="center"
             android:minHeight="0dp"
-            android:text="前往市场"
+            android:text="创建交易"
             android:textColor="@color/sc_ink"
             android:textSize="15sp"
             android:textStyle="bold" />

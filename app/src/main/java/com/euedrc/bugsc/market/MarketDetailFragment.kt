@@ -1,22 +1,35 @@
 package com.euedrc.bugsc.market
 
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
+import androidx.core.os.bundleOf
+import androidx.core.widget.addTextChangedListener
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.euedrc.bugsc.ImageLoader
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.requireScmLogin
+import com.euedrc.bugsc.market.transaction.AddressBranch
+import com.euedrc.bugsc.market.transaction.AddressChoice
+import com.euedrc.bugsc.market.transaction.AddressTree
+import com.euedrc.bugsc.market.transaction.TransactionClient
+import com.euedrc.bugsc.market.transaction.TransactionContractException
+import com.euedrc.bugsc.market.transaction.TransactionDraft
+import com.euedrc.bugsc.market.transaction.TransactionRules
+import com.euedrc.bugsc.ui.ImagePreviewDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.URL
+import org.json.JSONArray
+import java.math.BigDecimal
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -24,6 +37,8 @@ import java.util.*
 class MarketDetailFragment : Fragment() {
 
     private val client = ScmMarketClient()
+    private val transactionClient = TransactionClient()
+    private var selectedLocationId: Long? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
         inflater.inflate(R.layout.fragment_market_detail, container, false)
@@ -111,17 +126,12 @@ class MarketDetailFragment : Fragment() {
             tvRemark.visibility = View.VISIBLE
         }
 
-        btnGoMarket.text = if (order.isSell) "前往购买" else "前往出售"
-        btnGoMarket.setOnClickListener {
-            runCatching {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(MARKET_URL)))
-            }
-        }
-
         val btnContact = view.findViewById<Button>(R.id.btn_contact)
         val myId = if (com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) com.euedrc.bugsc.scm.ScmAuthStore.session().userId else 0L
         if (order.creatorId <= 0 || (myId != 0L && order.creatorId == myId)) {
             btnContact.visibility = View.GONE
+            view.findViewById<View>(R.id.container_transaction_form).visibility = View.GONE
+            btnGoMarket.visibility = View.GONE
         } else {
             btnContact.setOnClickListener {
                 requireScmLogin {
@@ -134,19 +144,252 @@ class MarketDetailFragment : Fragment() {
                     )
                 }
             }
+            bindTransactionForm(view, order, btnGoMarket)
         }
 
-        loadImage(ivItem, order.thumbnailUrlHd)
+        val itemImageUrl = order.thumbnailUrlHd.ifBlank { order.thumbnailUrl }
+        loadImage(ivItem, itemImageUrl)
+        bindImagePreview(ivItem, itemImageUrl)
         loadImage(ivAvatar, order.avatar)
+    }
+
+    private fun bindTransactionForm(view: View, order: MarketOrder, submit: Button) {
+        val quantity = view.findViewById<EditText>(R.id.et_transaction_quantity)
+        val shippingFee = view.findViewById<EditText>(R.id.et_shipping_fee)
+        val total = view.findViewById<TextView>(R.id.tv_transaction_total)
+        val hint = view.findViewById<TextView>(R.id.tv_trade_window_hint)
+        val quantityLabel = view.findViewById<TextView>(R.id.tv_quantity_label)
+        quantityLabel.text = "交易数量（最多 ${order.remainingQuantity} 个）"
+
+        fun updateTotal() {
+            val count = quantity.text.toString().toIntOrNull() ?: 0
+            val amount = TransactionRules.total(BigDecimal.valueOf(order.unitPrice), count)
+            total.text = "交易总额（UEC）：${NumberFormat.getNumberInstance(Locale.US).format(amount)}"
+        }
+        quantity.addTextChangedListener { updateTotal() }
+        updateTotal()
+
+        val open = currentTradeWindow(order)
+        hint.text = when (open) {
+            true -> "当前在交易时间内"
+            false -> "当前不在创建者交易时间内，建议先联系交易者"
+            null -> "建议先确认创建者交易时间后再提交"
+        }
+        hint.setTextColor(resources.getColor(if (open == true) R.color.sc_ok else R.color.sc_warn, null))
+
+        loadAddressSpinners(view)
+        submit.text = if (order.isSell) "创建购买交易" else "创建出售交易"
+        submit.setOnClickListener {
+            requireScmLogin {
+                val validation = TransactionRules.validate(
+                    quantityText = quantity.text.toString(),
+                    maxQuantity = order.remainingQuantity,
+                    locationId = selectedLocationId,
+                    shippingFeeText = shippingFee.text.toString(),
+                )
+                quantity.error = validation.quantityError
+                shippingFee.error = validation.shippingFeeError
+                if (validation.locationError != null) {
+                    view.findViewById<TextView>(R.id.tv_selected_location).apply {
+                        text = validation.locationError
+                        setTextColor(resources.getColor(R.color.sc_danger, null))
+                    }
+                }
+                if (!validation.isValid) return@requireScmLogin
+                createTransaction(
+                    order = order,
+                    draft = TransactionDraft(
+                        orderNumber = order.orderNumber,
+                        number = validation.quantity!!,
+                        locationId = selectedLocationId!!,
+                        shippingFee = validation.shippingFee!!,
+                    ),
+                    submit = submit,
+                )
+            }
+        }
+    }
+
+    private fun loadAddressSpinners(view: View) {
+        val system = view.findViewById<Spinner>(R.id.spinner_system)
+        val planet = view.findViewById<Spinner>(R.id.spinner_planet)
+        val station = view.findViewById<Spinner>(R.id.spinner_station)
+        val selected = view.findViewById<TextView>(R.id.tv_selected_location)
+        selectedLocationId = null
+        showLocationPrompt(selected, "请选择收货位置")
+        bindSpinner(planet, "请先选择星系", emptyList()) {}
+        bindSpinner(station, "请先选择星体", emptyList()) {}
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { AddressTree.build(transactionClient.addressList()) }
+            }
+            result.onFailure {
+                selectedLocationId = null
+                selected.text = "收货位置加载失败，点击重试"
+                selected.setTextColor(resources.getColor(R.color.sc_danger, null))
+                selected.setOnClickListener { loadAddressSpinners(view) }
+            }.onSuccess { tree ->
+                selected.setOnClickListener(null)
+                bindSpinner(system, "请选择星系", tree.roots) { systemBranch ->
+                    selectedLocationId = null
+                    bindSpinner(station, "请先选择星体", emptyList()) {}
+                    if (systemBranch.children.isEmpty()) {
+                        selectedLocationId = systemBranch.node.id
+                        showSelectedLocation(selected, systemBranch)
+                    } else {
+                        showLocationPrompt(selected, "请选择星体")
+                    }
+                    bindSpinner(planet, "请选择星体", systemBranch.children) { planetBranch ->
+                        selectedLocationId = null
+                        if (planetBranch.children.isEmpty()) {
+                            selectedLocationId = planetBranch.node.id
+                            showSelectedLocation(selected, planetBranch)
+                        } else {
+                            showLocationPrompt(selected, "请选择站点")
+                        }
+                        bindSpinner(station, "请选择站点", planetBranch.children) { stationBranch ->
+                            selectedLocationId = stationBranch.node.id
+                            showSelectedLocation(selected, stationBranch)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showLocationPrompt(selected: TextView, text: String) {
+        selected.text = text
+        selected.setTextColor(resources.getColor(R.color.sc_text_dim, null))
+    }
+
+    private fun showSelectedLocation(selected: TextView, branch: AddressBranch) {
+        selected.text = branch.node.name
+        selected.setTextColor(resources.getColor(R.color.sc_text, null))
+    }
+
+    private fun bindSpinner(
+        spinner: Spinner,
+        prompt: String,
+        branches: List<AddressBranch>,
+        onSelected: (AddressBranch) -> Unit,
+    ) {
+        val choices = AddressChoice.withPrompt(prompt, branches)
+        spinner.adapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_dropdown_item,
+            choices.map { it.label },
+        )
+        spinner.isEnabled = branches.isNotEmpty()
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                choices.getOrNull(position)?.branch?.let(onSelected)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+    }
+
+    private fun createTransaction(order: MarketOrder, draft: TransactionDraft, submit: Button) {
+        submit.isEnabled = false
+        submit.text = "正在提交..."
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (transactionClient.checkOngoing(order.orderNumber)) {
+                        val existing = transactionClient.page(1, orderNumber = order.orderNumber).items.firstOrNull()
+                        ExistingTransaction(existing?.transactionNumber.orEmpty())
+                    } else {
+                        CreatedTransaction(transactionClient.create(draft).identifier)
+                    }
+                }
+            }
+            submit.isEnabled = true
+            submit.text = if (order.isSell) "创建购买交易" else "创建出售交易"
+            result.onFailure {
+                if (it is TransactionContractException) {
+                    showTransactionDialog(
+                        title = "交易已提交",
+                        message = it.message ?: "后台未返回交易编号，请前往“我的交易”查看",
+                        transactionNumber = "",
+                    )
+                } else {
+                    Toast.makeText(requireContext(), it.message ?: "创建交易失败", Toast.LENGTH_LONG).show()
+                }
+            }.onSuccess { outcome ->
+                when (outcome) {
+                    is ExistingTransaction -> showTransactionDialog(
+                        title = "已有进行中的交易",
+                        message = if (outcome.number.isBlank()) {
+                            "该订单已有进行中的交易，无需重复创建。请前往“我的交易”查看"
+                        } else {
+                            "该订单已有进行中的交易，无需重复创建。\n交易编号：${outcome.number}"
+                        },
+                        transactionNumber = outcome.number,
+                    )
+                    is CreatedTransaction -> showTransactionDialog(
+                        title = "交易创建成功",
+                        message = "交易编号：${outcome.number}",
+                        transactionNumber = outcome.number,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun showTransactionDialog(title: String, message: String, transactionNumber: String) {
+        val builder = AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage(message)
+            .setNegativeButton("留在当前页", null)
+        if (transactionNumber.isNotBlank()) {
+            builder.setPositiveButton("查看详情") { _, _ ->
+                findNavController().navigate(
+                    R.id.TransactionDetailFragment,
+                    bundleOf("transactionNumber" to transactionNumber),
+                )
+            }
+        } else {
+            builder.setPositiveButton("我的交易") { _, _ ->
+                findNavController().navigate(R.id.TransactionListFragment)
+            }
+        }
+        builder.show()
+    }
+
+    private fun currentTradeWindow(order: MarketOrder): Boolean? {
+        val days = runCatching {
+            val array = JSONArray(order.tradeTime)
+            (0 until array.length()).map { array.optInt(it) == 1 }
+        }.getOrNull() ?: return null
+        return runCatching {
+            val now = Calendar.getInstance(TimeZone.getTimeZone("GMT+08:00"))
+            val dayIndex = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
+            com.euedrc.bugsc.market.transaction.TradeWindow.isOpen(
+                days,
+                order.tradeStartTime,
+                order.tradeEndTime,
+                dayIndex,
+                now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE),
+            )
+        }.getOrNull()
     }
 
     private fun loadImage(iv: ImageView, url: String) {
         if (url.isBlank()) return
-        viewLifecycleOwner.lifecycleScope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
-                runCatching { BitmapFactory.decodeStream(URL(url).openStream()) }.getOrNull()
-            }
-            bitmap?.let { iv.setImageBitmap(it) }
+        ImageLoader.load(this, iv, url)
+    }
+
+    private fun bindImagePreview(iv: ImageView, url: String) {
+        if (url.isBlank()) {
+            iv.isClickable = false
+            iv.setOnClickListener(null)
+            return
+        }
+        iv.isClickable = true
+        iv.isFocusable = true
+        iv.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("market_detail", "preview_image")
+            ImagePreviewDialog.show(this, listOf(url))
         }
     }
 
@@ -192,7 +435,7 @@ class MarketDetailFragment : Fragment() {
     private fun formatPrice(price: Double): String =
         NumberFormat.getNumberInstance(Locale.US).format(price.toLong())
 
-    companion object {
-        private const val MARKET_URL = "https://flowcld.xyz/market"
-    }
+    private sealed interface CreateOutcome
+    private data class CreatedTransaction(val number: String) : CreateOutcome
+    private data class ExistingTransaction(val number: String) : CreateOutcome
 }

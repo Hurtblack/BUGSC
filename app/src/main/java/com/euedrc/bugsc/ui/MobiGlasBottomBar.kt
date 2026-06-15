@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -62,6 +64,7 @@ fun MobiGlasBottomBar(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    badgeIndices: Set<Int> = emptySet(),
 ) {
     val density = LocalDensity.current
     Surface(color = BarBg, tonalElevation = 0.dp, modifier = modifier) {
@@ -91,6 +94,7 @@ fun MobiGlasBottomBar(
                     MobiGlasTab(
                         item = item,
                         selected = index == selectedIndex,
+                        showBadge = index in badgeIndices,
                         onClick = { onSelect(index) },
                     )
                 }
@@ -100,7 +104,7 @@ fun MobiGlasBottomBar(
 }
 
 @Composable
-private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, onClick: () -> Unit) {
+private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, showBadge: Boolean, onClick: () -> Unit) {
     val density = LocalDensity.current
 
     // 选中时内容更接近“竖立”状态，并带一点手环风格的放大。
@@ -174,12 +178,23 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, onClick: () -> Un
                     cameraDistance = 4.5f * density.density
                 }
         ) {
-            Icon(
-                imageVector = item.icon,
-                contentDescription = item.label,
-                tint = iconColor,
-                modifier = Modifier.size(28.dp),
-            )
+            Box {
+                Icon(
+                    imageVector = item.icon,
+                    contentDescription = item.label,
+                    tint = iconColor,
+                    modifier = Modifier.size(28.dp),
+                )
+                if (showBadge) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 3.dp, y = (-3).dp)
+                            .size(8.dp)
+                            .background(Color(0xFFFF5B5B), CircleShape),
+                    )
+                }
+            }
             Text(
                 text = item.label,
                 color = iconColor,

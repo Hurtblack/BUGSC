@@ -23,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.ui.ImagePreviewDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -220,7 +221,9 @@ class NewsFragment : Fragment() {
             setOnClickListener { openLink(item.link) }
         }
 
-        val carousel = NewsImageCarousel(this, item.imageUrls)
+        val carousel = NewsImageCarousel(this, item.imageUrls) { imageUrls, index ->
+            showImagePreview(imageUrls, index)
+        }
         carousel.view.layoutParams = LinearLayout.LayoutParams(dp(96), dp(68)).apply {
             marginEnd = dp(12)
         }
@@ -333,6 +336,11 @@ class NewsFragment : Fragment() {
         }.onFailure {
             Toast.makeText(requireContext(), "无法打开链接", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun showImagePreview(imageUrls: List<String>, initialIndex: Int) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("news", "preview_image")
+        ImagePreviewDialog.show(this, imageUrls, initialIndex)
     }
 
     private fun dp(value: Int): Int = TypedValue.applyDimension(

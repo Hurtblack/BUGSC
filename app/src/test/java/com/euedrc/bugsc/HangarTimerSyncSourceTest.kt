@@ -6,25 +6,6 @@ import org.junit.Test
 class HangarTimerSyncSourceTest {
 
     @Test
-    fun `parse exectimer json startTime as seconds`() {
-        val json = """
-            {
-              "startTime": 1780773760886,
-              "isRunning": true,
-              "lastUpdateTime": 1780780960886,
-              "lastUpdateTimeString": "2026-06-06T21:22:40.886Z",
-              "adminSettings": {
-                "powerUpDuration": 24,
-                "powerDownDuration": 12,
-                "cooldownDuration": 5.01165
-              }
-            }
-        """.trimIndent()
-
-        assertEquals(1780773760L, HangarTimerSyncSources.parseExecTimerAnchorSeconds(json))
-    }
-
-    @Test
     fun `parse xyxyll app js keeps initial open time as anchor`() {
         val script = """
             const CYCLE_DRIFT_MS = 226;
@@ -37,7 +18,7 @@ class HangarTimerSyncSourceTest {
     }
 
     @Test
-    fun `xyxyll candidate uses all green anchor lights`() {
+    fun `authoritative candidate uses xyxyll all green anchor`() {
         val script = """
             const CYCLE_DRIFT_MS = 226;
             const DESIGN_ONLINE_MIN  = 65;
@@ -45,7 +26,7 @@ class HangarTimerSyncSourceTest {
             const INITIAL_OPEN_TIME = new Date('2026-06-09T20:37:55.696-04:00');
         """.trimIndent()
 
-        val candidate = HangarTimerSyncSources.buildXyxyllCandidate(script)
+        val candidate = HangarTimerSyncSources.buildAuthoritativeCandidate(script)
 
         assertEquals("exec.xyxyll.com", candidate.name)
         assertEquals(listOf("green", "green", "green", "green", "green"), candidate.anchorLights)

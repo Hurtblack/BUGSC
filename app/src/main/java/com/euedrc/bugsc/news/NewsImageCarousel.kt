@@ -20,6 +20,7 @@ import com.euedrc.bugsc.R
 class NewsImageCarousel(
     private val fragment: Fragment,
     imageUrls: List<String>,
+    private val onImageClick: (List<String>, Int) -> Unit = { _, _ -> },
 ) {
     val view: View
 
@@ -58,7 +59,7 @@ class NewsImageCarousel(
 
         when (urls.size) {
             0 -> Unit
-            1 -> view.addView(createImageView(context, urls.single()))
+            1 -> view.addView(createImageView(context, urls.single(), 0))
             else -> addPager(context)
         }
     }
@@ -111,13 +112,16 @@ class NewsImageCarousel(
         updateIndicator(0)
     }
 
-    private fun createImageView(context: Context, url: String): ImageView =
+    private fun createImageView(context: Context, url: String, index: Int): ImageView =
         ImageView(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
             )
             scaleType = ImageView.ScaleType.CENTER_CROP
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onImageClick(urls, index) }
             ImageLoader.load(
                 fragment = fragment,
                 imageView = this,
@@ -138,7 +142,7 @@ class NewsImageCarousel(
 
     private inner class ImageAdapter : RecyclerView.Adapter<ImageViewHolder>() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ImageViewHolder =
-            ImageViewHolder(createImageView(parent.context, urls[viewType]))
+            ImageViewHolder(createImageView(parent.context, urls[viewType], viewType))
 
         override fun onBindViewHolder(holder: ImageViewHolder, position: Int) = Unit
 
