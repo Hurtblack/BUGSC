@@ -119,11 +119,19 @@ class AgentPlanner(private val skillCards: List<AgentSkillCard>) {
     }
 
     private fun selectCards(query: AgentQuery): List<AgentSkillCard> {
-        val intents = query.intents.map { it.intent }.toSet()
+        val intents = (query.intents.map { it.intent } + query.entities.mapNotNull { it.impliedIntent() }).toSet()
         val matched = skillCards
             .filter { card -> card.matchingIntents.any { it in intents } }
             .ifEmpty { skillCards.filter { AgentIntent.UNKNOWN in it.matchingIntents } }
         return matched.take(MAX_CARDS)
+    }
+
+    private fun ScoredEntity.impliedIntent(): AgentIntent? = when (type) {
+        "blueprint" -> AgentIntent.BLUEPRINT
+        "mining_element" -> AgentIntent.MINING
+        "ship" -> AgentIntent.SHIP_INFO
+        "wikelo_trade" -> AgentIntent.WIKELO
+        else -> null
     }
 
     private fun extractTerm(query: AgentQuery): String {

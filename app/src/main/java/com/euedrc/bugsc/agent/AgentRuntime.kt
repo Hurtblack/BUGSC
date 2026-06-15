@@ -51,7 +51,7 @@ class AgentRuntime(
                 toolResults = toolResults,
             ),
         )
-        return if (answer.looksLikePseudoToolCall()) fallback else answer
+        return if (answer.looksLikePseudoToolCall() || answer.contradictsUsefulToolResults(toolResults)) fallback else answer
     }
 
     private fun fallbackAnswer(text: String, results: List<SkillResult>): String {
@@ -122,5 +122,25 @@ class AgentRuntime(
             value.contains("\"tool\"") ||
             value.contains("我再查") ||
             value.contains("正在查询")
+    }
+
+    private fun String.contradictsUsefulToolResults(results: List<AgentToolResult>): Boolean {
+        if (results.none { it.hasUsefulData() }) return false
+        return NO_RESULT_PHRASES.any { contains(it, ignoreCase = true) }
+    }
+
+    companion object {
+        private val NO_RESULT_PHRASES = listOf(
+            "不存在",
+            "没有直接名为",
+            "没有直接叫",
+            "没有命中",
+            "未命中",
+            "查不到",
+            "找不到",
+            "没有找到",
+            "没有一个官方名称",
+            "不是游戏内置的正式译名",
+        )
     }
 }

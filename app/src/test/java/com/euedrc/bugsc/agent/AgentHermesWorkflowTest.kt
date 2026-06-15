@@ -45,7 +45,13 @@ class AgentHermesWorkflowTest {
         val registry = AgentToolRegistry(listOf(blueprint, mission, wikelo, mining))
         val transport = RecordingTransport()
         val runtime = AgentRuntime(
-            analyzer = QueryAnalyzer(),
+            analyzer = QueryAnalyzer(
+                AgentEntityIndex(
+                    entries = listOf(
+                        AgentEntity("blueprint", "Killshot Rifle", "绝杀 步枪", listOf("绝杀", "Killshot Rifle")),
+                    ),
+                ),
+            ),
             planner = planner,
             toolRegistry = registry,
             promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
@@ -88,5 +94,33 @@ class AgentHermesWorkflowTest {
 
         assertTrue(answer.contains("Blueprint evidence"))
         assertTrue(!answer.contains("<search>"))
+    }
+
+    @Test
+    fun contradictingNoResultAnswerFallsBackToToolEvidence() = runBlocking {
+        val blueprint = RecordingTool("search_blueprint", summary = "绝杀 步枪 / Killshot Rifle 蓝图")
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(
+                AgentEntityIndex(
+                    entries = listOf(
+                        AgentEntity("blueprint", "Killshot Rifle", "绝杀 步枪", listOf("绝杀", "Killshot Rifle")),
+                    ),
+                ),
+            ),
+            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
+            toolRegistry = AgentToolRegistry(listOf(blueprint)),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
+                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
+                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"本地资料中不存在一个官方名称为绝杀的独立物品。"}}]}""")
+            }),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+        )
+
+        val answer = runtime.answer("绝杀是什么")
+
+        assertTrue("search_blueprint was not called", blueprint.calls.isNotEmpty())
+        assertTrue(answer, answer.contains("Killshot Rifle"))
+        assertTrue(answer, !answer.contains("不存在"))
     }
 }
