@@ -12,8 +12,8 @@ SCMobiGlas 需要在 App 内提供一个专门解决 Star Citizen 问题的助�
 - 用户填写自己的 DeepSeek API Key 后，可以打开 SCMBOT 对话。
 - SCMBOT 复用现有聊天页视觉风格，显示为固定角色 `SCMBOT`。
 - App 先调用内置 Skill 查询结构化数据，再把工具结果交给 DeepSeek 归纳回答。
-- Skill 第一版覆盖本地数据查询和可用的 SCM API 查询。
-- SCM API 不可用或未登录时，Agent 降级使用本地数据，并在回答中说明远程数据不可用。
+- Skill 第一版覆盖本地数据查询、当前已知查询 API 和可用的 SCM API 查询。
+- 远程查询 API 不可用或 SCM 未登录时，Agent 降级使用本地数据，并在回答中说明远程数据不可用。
 
 ## 非目标
 
@@ -67,7 +67,7 @@ SCMBOT 的处理流程：
 1. 用户发送问题。
 2. 本地保存用户消息并显示乐观气泡。
 3. `AgentSkillRegistry` 根据问题选择候选 Skill。
-4. Skill 查询本地 assets、现有 Repository 或 SCM API。
+4. Skill 查询本地 assets、现有 Repository、当前已知查询 API 或 SCM API。
 5. `AgentPromptBuilder` 将用户问题、工具结果、来源和限制组装为 DeepSeek prompt。
 6. `DeepSeekAgentClient` 调用 `/chat/completions`。
 7. App 保存并展示 SCMBOT 回复。
@@ -131,6 +131,19 @@ API Key 使用 Android Keystore 或加密 SharedPreferences 保存；如果项�
 
 Skill 不直接输出最终自然语言攻略，只返回结构化事实和简短说明。
 
+### 已知查询 API Skill
+
+当前 App 已经掌握或维护过的远程查询 API，也可以封装为 Agent Skill。它们和 SCM API 并列，都是工具数据源，不是 Agent 后端。
+
+第一版可按现有代码和维护脚本逐步纳入：
+
+- `ScmdbQuerySkill`：查询 SCMDB 任务、版本、地点和任务奖励等数据。
+- `ScCraftQuerySkill`：查询 sc-craft 蓝图、材料和制作相关数据。
+- `UexQuerySkill`：查询 UEX 船只、组件、价格或配装相关数据。
+- `ScWikiQuerySkill`：查询 Star Citizen Wiki 飞船、硬点、组件等补充资料。
+
+这些 Skill 需要优先复用项目中已有 Client、Repository、生成脚本沉淀的字段映射和翻译逻辑。每个远程 API 都必须有超时、错误降级和来源标记，不能让单个 API 失败阻断 SCMBOT 回答。
+
 ### SCM API Skill
 
 SCM API 是 Agent 的工具源之一，不是后端 Agent：
@@ -164,7 +177,7 @@ SCM API 是 Agent 的工具源之一，不是后端 Agent：
 - 未配置 DeepSeek：输入区禁用或发送时引导设置。
 - API Key 错误：提示用户检查 Key，不清空输入。
 - DeepSeek 网络失败：保留用户消息，助手回复失败气泡可重试。
-- SCM API 失败：记录为工具不可用，仍尝试本地数据回答。
+- 远程查询 API 或 SCM API 失败：记录为工具不可用，仍尝试本地数据回答。
 - 本地 Skill 无结果：允许模型基于通用知识回答，但必须标注“未命中本地数据”。
 - 回复过长：第一版限制工具上下文条数和 prompt 长度。
 
@@ -192,7 +205,7 @@ SCM API 是 Agent 的工具源之一，不是后端 Agent：
 - 填写 DeepSeek Key 后连接测试可用。
 - 打开 SCMBOT 后可发送问题并显示回答。
 - 查询矿物、蓝图、任务、船只时能命中本地数据。
-- SCM API 不可用时仍能给出本地数据回答。
+- 已知查询 API 或 SCM API 不可用时仍能给出本地数据回答。
 - 普通 SCM 私聊、未读数和 WebSocket 不受影响。
 
 ## 实施顺序
@@ -203,5 +216,6 @@ SCM API 是 Agent 的工具源之一，不是后端 Agent：
 4. 实现 DeepSeekAgentClient 和连接测试。
 5. 提取或复用聊天气泡渲染，完成 SCMBOT 对话页。
 6. 实现第一批本地 Skill。
-7. 接入 SCM API Skill 的公开查询能力。
-8. 补充测试和实机验证。
+7. 接入当前已知查询 API Skill。
+8. 接入 SCM API Skill 的公开查询能力。
+9. 补充测试和实机验证。
