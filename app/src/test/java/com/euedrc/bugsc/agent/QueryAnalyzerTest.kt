@@ -42,6 +42,13 @@ class QueryAnalyzerTest {
     }
 
     @Test
+    fun howToMakeQuestionMatchesBlueprintIntent() {
+        val query = analyzer.analyze("石英怎么做")
+
+        assertEquals(AgentIntent.BLUEPRINT, query.intents.first().intent)
+    }
+
+    @Test
     fun identityAndPrivacyQuestionMatchesSelfHelpFirst() {
         val query = analyzer.analyze("你是谁？我的 Key 会上传吗？")
 

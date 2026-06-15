@@ -35,6 +35,27 @@ class AgentPromptBuilderTest {
     }
 
     @Test
+    fun promptForbidsPseudoToolCalls() {
+        val messages = builder.build(
+            userText = "石英蓝图怎么弄",
+            history = emptyList(),
+            skillResults = listOf(
+                SkillResult(
+                    skillId = "blueprint",
+                    summary = "蓝图资料 未命中相关数据",
+                    facts = emptyList(),
+                    sources = listOf(AgentSource("蓝图资料", "local")),
+                    confidence = 0f,
+                ),
+            ),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("不要输出 <search>"))
+        assertTrue(text.contains("不能假装正在联网查询"))
+    }
+
+    @Test
     fun promptFiltersSensitiveFields() {
         val messages = builder.build(
             userText = "token=secret Cookie=session DeepSeek API Key sk-test",
