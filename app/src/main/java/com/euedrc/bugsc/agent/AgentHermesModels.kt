@@ -40,7 +40,7 @@ object AgentSkillCardProvider {
             title = "蓝图制作与来源排查",
             matchingIntents = setOf(AgentIntent.BLUEPRINT),
             workflow = "先查蓝图本体，再交叉查任务来源、维科洛兑换和矿物材料。资料未命中不等于不能回答，需要说明是资料未命中还是模型推断，并给下一步排查路径。",
-            preferredTools = listOf("search_blueprint", "search_mission", "search_wikelo", "search_mining"),
+            preferredTools = listOf("search_blueprint", "search_scm_blueprint", "search_mission", "search_wikelo", "search_mining"),
         ),
         AgentSkillCard(
             id = "mission-reward",
@@ -61,7 +61,7 @@ object AgentSkillCardProvider {
             title = "市场查询排查",
             matchingIntents = setOf(AgentIntent.MARKET),
             workflow = "先使用已开放的市场查询能力；不要声称能访问未授权登录数据，价格和库存必须标注数据来源。",
-            preferredTools = listOf("search_market"),
+            preferredTools = listOf("search_scm_item", "search_market"),
         ),
         AgentSkillCard(
             id = "general-guide",

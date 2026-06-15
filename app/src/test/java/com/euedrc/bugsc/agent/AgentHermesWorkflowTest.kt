@@ -38,11 +38,12 @@ class AgentHermesWorkflowTest {
     @Test
     fun blueprintWorkflowPlansMultipleEvidenceTools() = runBlocking {
         val blueprint = RecordingTool("search_blueprint", summary = "蓝图未直接命中")
+        val scmBlueprint = RecordingTool("search_scm_blueprint", summary = "SCM 蓝图未直接命中")
         val mission = RecordingTool("search_mission", summary = "任务未直接命中")
         val wikelo = RecordingTool("search_wikelo", summary = "维科洛未直接命中")
         val mining = RecordingTool("search_mining", summary = "材料线索未直接命中")
         val planner = AgentPlanner(AgentSkillCardProvider.defaultCards())
-        val registry = AgentToolRegistry(listOf(blueprint, mission, wikelo, mining))
+        val registry = AgentToolRegistry(listOf(blueprint, scmBlueprint, mission, wikelo, mining))
         val transport = RecordingTransport()
         val runtime = AgentRuntime(
             analyzer = QueryAnalyzer(
@@ -62,6 +63,7 @@ class AgentHermesWorkflowTest {
         runtime.answer("石英怎么做")
 
         assertEquals(listOf("石英"), blueprint.calls.map { it.args["term"] })
+        assertEquals(listOf("石英"), scmBlueprint.calls.map { it.args["term"] })
         assertEquals(listOf("石英"), mission.calls.map { it.args["term"] })
         assertEquals(listOf("石英"), wikelo.calls.map { it.args["term"] })
         assertEquals(listOf("石英"), mining.calls.map { it.args["term"] })
@@ -72,6 +74,7 @@ class AgentHermesWorkflowTest {
         assertTrue(prompt.contains("Skill 工作流：blueprint-crafting"))
         assertTrue(prompt.contains("可用工具证据"))
         assertTrue(prompt.contains("search_blueprint"))
+        assertTrue(prompt.contains("search_scm_blueprint"))
         assertTrue(prompt.contains("资料未命中不等于不能回答"))
     }
 

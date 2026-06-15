@@ -17,6 +17,11 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.market.publish.MarketPublishClient
+import com.euedrc.bugsc.market.publish.MarketPublishJson
+import com.euedrc.bugsc.market.publish.PublishItemValue
+import com.euedrc.bugsc.market.transaction.TransactionClient
+import com.euedrc.bugsc.scm.ScmAuthStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,7 +37,10 @@ class AgentChatFragment : Fragment() {
     private lateinit var settingsStore: AgentSettingsStore
     private lateinit var historyStore: AgentHistoryStore
     private val localProvider: LocalAgentDataProvider by lazy { LocalAgentDataProvider(requireContext()) }
+    private val marketPublishClient: MarketPublishClient by lazy { MarketPublishClient() }
+    private val transactionClient: TransactionClient by lazy { TransactionClient() }
     private var conversationVersion: Long = 0L
+    private var pendingOrderDraft: ScmOrderDraftResolution.Resolved? = null
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_agent_chat, parent, false)
@@ -83,6 +91,11 @@ class AgentChatFragment : Fragment() {
     private fun sendMessage() {
         val text = input.text.toString().trim()
         if (text.isBlank()) return
+        val orderDraft = ScmOrderDraftParser.parse(text)
+        if (orderDraft.isOrderIntent) {
+            sendOrderDraftMessage(text, orderDraft)
+            return
+        }
         val settings = settingsStore.settings()
         if (!settings.isConfigured) {
             Toast.makeText(requireContext(), R.string.agent_input_config_hint, Toast.LENGTH_SHORT).show()
@@ -108,8 +121,41 @@ class AgentChatFragment : Fragment() {
         }
     }
 
+    private fun sendOrderDraftMessage(text: String, parsed: ScmOrderDraftParseResult) {
+        val requestVersion = conversationVersion
+        val userMsg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.USER, text, System.currentTimeMillis(), AgentMessageStatus.SENT)
+        historyStore.append(userMsg)
+        addBubble(text, mine = true)
+        input.setText("")
+        if (!ScmAuthStore.isLoggedIn) {
+            appendAssistantMessage("需要先登录 SCM，才能创建订单。")
+            return
+        }
+        lifecycleScope.launch {
+            val resolution = withContext(Dispatchers.IO) {
+                runCatching {
+                    ScmOrderDraftResolver(
+                        itemSearch = { marketPublishClient.searchItems(it) },
+                        addressList = { transactionClient.addressList() },
+                    ).resolve(parsed)
+                }.getOrElse { ScmOrderDraftResolution.NeedMoreInfo(it.message ?: "订单草稿解析失败。") }
+            }
+            if (!isAdded || requestVersion != conversationVersion) return@launch
+            when (resolution) {
+                is ScmOrderDraftResolution.NeedMoreInfo -> appendAssistantMessage(resolution.message)
+                is ScmOrderDraftResolution.Resolved -> {
+                    pendingOrderDraft = resolution
+                    appendAssistantMessage(resolution.confirmationMarkdown())
+                    addOrderActions(resolution)
+                    scrollToBottom()
+                }
+            }
+        }
+    }
+
     private fun startNewChat() {
         conversationVersion += 1L
+        pendingOrderDraft = null
         historyStore.clear()
         input.setText("")
         renderHistory()
@@ -124,7 +170,7 @@ class AgentChatFragment : Fragment() {
             deepSeekClient = DeepSeekClient(UrlConnectionDeepSeekTransport()),
             settingsProvider = { settingsStore.settings() },
             planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(AgentLocalSearchTools.create(localProvider, index)),
+            toolRegistry = AgentToolRegistry(AgentLocalSearchTools.create(localProvider, index) + ScmAgentTools.create()),
         )
     }
 
@@ -149,6 +195,84 @@ class AgentChatFragment : Fragment() {
             },
         )
         container.addView(row)
+    }
+
+    private fun appendAssistantMessage(text: String) {
+        val msg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.ASSISTANT, text, System.currentTimeMillis(), AgentMessageStatus.SENT)
+        historyStore.append(msg)
+        if (isAdded) {
+            addBubble(text, mine = false)
+            scrollToBottom()
+        }
+    }
+
+    private fun addOrderActions(draft: ScmOrderDraftResolution.Resolved) {
+        val row = LinearLayout(requireContext()).apply {
+            gravity = Gravity.START
+            setPadding(0, dp(4), 0, dp(6))
+        }
+        val confirm = Button(requireContext()).apply {
+            text = "确认创建"
+            isAllCaps = false
+            setOnClickListener {
+                row.visibility = View.GONE
+                createPendingOrder(draft)
+            }
+        }
+        val cancel = Button(requireContext()).apply {
+            text = "取消"
+            isAllCaps = false
+            setOnClickListener {
+                if (pendingOrderDraft == draft) pendingOrderDraft = null
+                appendAssistantMessage("已取消创建订单。")
+                row.visibility = View.GONE
+            }
+        }
+        row.addView(confirm)
+        row.addView(cancel)
+        container.addView(row)
+    }
+
+    private fun createPendingOrder(draft: ScmOrderDraftResolution.Resolved) {
+        if (pendingOrderDraft != draft) {
+            appendAssistantMessage("这个订单草稿已失效，请重新发起创建。")
+            return
+        }
+        pendingOrderDraft = null
+        appendAssistantMessage("正在创建 SCM 订单…")
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val item = PublishItemValue(
+                        item = draft.item,
+                        quantity = draft.parsed.quantity,
+                        price = requireNotNull(draft.parsed.unitPrice),
+                        quality = null,
+                    )
+                    marketPublishClient.createOrder(
+                        creatorType = requireNotNull(draft.parsed.creatorType),
+                        locationId = draft.location.id,
+                        status = draft.parsed.status,
+                        expireTime = draft.parsed.expireTime,
+                        items = listOf(item),
+                    )
+                    marketPublishClient.ownOrders(1, creatorType = draft.parsed.creatorType)
+                        .let { MarketPublishJson.findCreatedOrderNumber(it, draft.parsed.creatorType, draft.item.itemName) }
+                }
+            }
+            if (!isAdded) return@launch
+            result.onFailure {
+                appendAssistantMessage("创建失败：${it.message ?: "SCM 请求失败"}")
+            }.onSuccess { orderNumber ->
+                appendAssistantMessage(
+                    if (orderNumber.isBlank()) {
+                        "订单已创建，可在“我的挂单”查看。"
+                    } else {
+                        "订单已创建：$orderNumber"
+                    },
+                )
+            }
+        }
     }
 
     private fun scrollToBottom() {
