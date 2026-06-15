@@ -45,9 +45,23 @@
             </LinearLayout>
 
             <Button
+                android:id="@+id/btn_agent_new_chat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/button_outline_accent"
+                android:minWidth="0dp"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="8dp"
+                android:text="@string/agent_new_chat"
+                android:textAllCaps="false"
+                android:textColor="@color/sc_accent"
+                android:textSize="12sp" />
+
+            <Button
                 android:id="@+id/btn_agent_settings"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:background="@drawable/button_outline_accent"
                 android:minWidth="0dp"
                 android:paddingHorizontal="12dp"

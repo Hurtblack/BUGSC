@@ -13,6 +13,8 @@
     <string name="agent_input_hint">询问船只、矿物、蓝图、任务…</string>
     <string name="agent_input_config_hint">请先设置 DeepSeek API Key</string>
     <string name="agent_send">发送</string>
+    <string name="agent_new_chat">新对话</string>
+    <string name="agent_new_chat_started">已开启新对话</string>
     <string name="agent_status_deepseek">本地 Agent · DeepSeek</string>
     <string name="agent_settings_saved">已保存 DeepSeek 设置</string>
     <string name="agent_test_success">上次连接测试成功</string>

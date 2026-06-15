@@ -47,6 +47,9 @@ class AgentChatFragment : Fragment() {
         view.findViewById<TextView>(R.id.tv_agent_title).text = profile.displayName
         view.findViewById<TextView>(R.id.tv_agent_status).text = getString(R.string.agent_status_deepseek)
         view.findViewById<TextView>(R.id.tv_agent_tagline).text = profile.tagline
+        view.findViewById<Button>(R.id.btn_agent_new_chat).setOnClickListener {
+            startNewChat()
+        }
         view.findViewById<Button>(R.id.btn_agent_settings).setOnClickListener {
             findNavController().navigate(R.id.AgentSettingsFragment)
         }
@@ -101,6 +104,13 @@ class AgentChatFragment : Fragment() {
                 scrollToBottom()
             }
         }
+    }
+
+    private fun startNewChat() {
+        historyStore.clear()
+        input.setText("")
+        renderHistory()
+        Toast.makeText(requireContext(), R.string.agent_new_chat_started, Toast.LENGTH_SHORT).show()
     }
 
     private fun buildRuntime(): AgentRuntime {
