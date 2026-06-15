@@ -57,6 +57,22 @@ class AgentPromptBuilderTest {
     }
 
     @Test
+    fun promptConstrainsOrderCreationToAppConfirmation() {
+        val messages = builder.build(
+            userText = "帮我创建一个出售订单",
+            history = emptyList(),
+            skillResults = emptyList(),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("订单类请求"))
+        assertTrue(text.contains("只协助整理订单草稿"))
+        assertTrue(text.contains("缺少出售或求购、物品、数量、单价、交易地点"))
+        assertTrue(text.contains("不要声称订单已创建"))
+        assertTrue(text.contains("用户点击确认"))
+    }
+
+    @Test
     fun promptFiltersSensitiveFields() {
         val messages = builder.build(
             userText = "token=secret Cookie=session DeepSeek API Key sk-test",

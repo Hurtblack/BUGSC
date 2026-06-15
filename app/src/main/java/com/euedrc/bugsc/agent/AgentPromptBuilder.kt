@@ -25,6 +25,9 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             appendLine("如果命中蓝图，按“### 蓝图”“### 材料”“### 来源”“### 结论”组织；没有内容的板块直接省略。")
             appendLine("每个板块最多 3 条要点；整段回答尽量控制在 10 行以内。")
             appendLine("资料未命中不等于不能回答；可以基于游戏常识给建议，但必须用一句话标注“本地资料未命中，以下是推断”。")
+            appendLine("订单类请求只协助整理订单草稿。缺少出售或求购、物品、数量、单价、交易地点时，只追问缺失字段，不要猜测。")
+            appendLine("字段齐全时只能提示已生成订单草稿并等待用户点击确认；真正创建订单必须由 App 在用户点击确认后执行。")
+            appendLine("不要声称订单已创建、已发布、已挂单，除非 App 明确返回创建成功结果。")
         }
         val messages = mutableListOf(DeepSeekMessage("system", sanitize(system)))
         history.takeLast(MAX_HISTORY).forEach { msg ->
