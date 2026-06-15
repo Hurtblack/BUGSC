@@ -2,6 +2,7 @@ package com.euedrc.bugsc.agent
 
 import android.content.Context
 import com.euedrc.bugsc.blueprint.BlueprintDataRepository
+import com.euedrc.bugsc.blueprint.ScCraftIndexEntry
 import com.euedrc.bugsc.mining.MiningRepository
 import com.euedrc.bugsc.shipfit.ShipCard
 import com.euedrc.bugsc.shipfit.ShipFitDataRepository
@@ -14,6 +15,7 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
     private val mining: MiningRepository by lazy { MiningRepository.get(appContext) }
     private val blueprint: BlueprintDataRepository by lazy { BlueprintDataRepository(appContext) }
     private val wikelo: WikeloRepository by lazy { WikeloRepository.get(appContext) }
+    private val materialAliases: AgentMaterialAliasIndex by lazy { AgentMaterialAliasIndex(mining.elements.values.toList()) }
     private val cachedEntityIndex: AgentEntityIndex by lazy { buildEntityIndex() }
 
     fun entityIndex(): AgentEntityIndex = cachedEntityIndex
@@ -36,7 +38,12 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                         type = "mining_element",
                         value = element.guid,
                         displayName = element.displayName,
-                        aliases = listOfNotNull(element.nameEn, element.nameCn),
+                        aliases = listOfNotNull(
+                            element.nameEn,
+                            AgentMaterialAliasIndex.baseMaterialName(element.nameEn),
+                            element.nameCn,
+                            element.nameCn?.let { AgentMaterialAliasIndex.cleanChineseName(it) },
+                        ),
                     ),
                 )
             }
@@ -129,7 +136,7 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
 
     private fun searchBlueprints(query: AgentQuery): List<AgentSearchHit> =
         blueprintMatches(query).asSequence()
-            .map { it to matchScore(query, it.nameEn, it.category, *it.materials.toTypedArray()) }
+            .map { it to blueprintScore(query, it) }
             .filter { it.second > 0 || query.entities.any { entity -> entity.type == "blueprint" && entity.value == it.first.nameEn } }
             .sortedByDescending { it.second }
             .take(3)
@@ -153,6 +160,12 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                     confidence = confidence(score),
                 )
             }.toList()
+
+    private fun blueprintScore(query: AgentQuery, entry: ScCraftIndexEntry): Int {
+        val directScore = matchScore(query, entry.nameEn, entry.category, *entry.materials.toTypedArray())
+        val aliasScore = if (entry.materials.any { materialAliases.matches(it, query.normalizedText) }) 10 else 0
+        return directScore + aliasScore
+    }
 
     private fun searchMissions(query: AgentQuery): List<AgentSearchHit> =
         blueprint.loadAllMissions().asSequence()
