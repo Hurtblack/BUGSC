@@ -28,33 +28,51 @@ data class ScmOrderDraftParseResult(
 }
 
 object ScmOrderDraftParser {
-    private val orderIntentWords = listOf("创建订单", "创建一个订单", "创建挂单", "发布订单", "发布挂单", "帮我创建", "挂单", "求购", "出售")
+    private val orderIntentWords = listOf(
+        "创建订单",
+        "创建一个订单",
+        "创建挂单",
+        "发布订单",
+        "发布挂单",
+        "帮我创建",
+        "挂单",
+        "求购",
+        "出售",
+        "想卖",
+        "想买",
+        "我要卖",
+        "我要买",
+        "我想卖",
+        "我想买",
+    )
     private val sellWords = listOf("出售", "卖", "售卖")
     private val buyWords = listOf("求购", "收购", "买")
     private val quantityRegex = Regex("""(?:数量\s*)?(\d+)\s*(?:个|件|把|份|台|组)""")
     private val explicitQuantityRegex = Regex("""数量\s*(\d+)""")
-    private val priceRegex = Regex("""(?:单价|价格|售价|收购价)?\s*(\d+(?:\.\d+)?)\s*(?:auec|uec|元|块)?""", RegexOption.IGNORE_CASE)
-    private val labeledPriceRegex = Regex("""(?:单价|价格|售价|收购价)\s*(\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-    private val locationRegex = Regex("""(?:地点|交易地点|在)\s*([^，,。；;\n]+)""")
+    private val priceRegex = Regex("""(?:单价|价格|售价|收购价)?\s*(\d+(?:\.\d+)?)\s*(w|万)?\s*(?:auec|uec|元|块)?""", RegexOption.IGNORE_CASE)
+    private val labeledPriceRegex = Regex("""(?:单价|价格|售价|收购价)\s*(\d+(?:\.\d+)?)\s*(w|万)?\s*(?:auec|uec|元|块)?""", RegexOption.IGNORE_CASE)
+    private val moneyWithUnitRegex = Regex("""(\d+(?:\.\d+)?)\s*(w|万)?\s*(?:auec|uec|元|块)""", RegexOption.IGNORE_CASE)
+    private val locationRegex = Regex("""(?:交易地点|地点|在)\s*(?:是|为|:|：)?\s*([^，,。；;\n]+)""")
     private val punctuation = Regex("""[，,。；;\n]+""")
+    private val moneyTextRegex = Regex("""(?:单价|价格|售价|收购价)\s*\d+(?:\.\d+)?\s*(?:w|万)?\s*(?:auec|uec|元|块)?|\d+(?:\.\d+)?\s*(?:w|万)\s*(?:auec|uec)?|\d+(?:\.\d+)?\s*(?:auec|uec|元|块)""", RegexOption.IGNORE_CASE)
+    private val orderFillerRegex = Regex("""^(我想|我要|请帮我|帮我)?\s*(创建一个|创建|发布一个|发布)?\s*(一个|一件|一把|订单|挂单)?\s*""")
+    private val followUpNoiseRegex = Regex("""(你)?搜一下\s*scm|搜一下|scm|就叫|叫|名称是|名字是|物品是|东西是""", RegexOption.IGNORE_CASE)
 
     fun parse(text: String): ScmOrderDraftParseResult {
         val raw = text.trim()
         val normalized = AgentAliasNormalizer.normalize(raw)
-        val isIntent = orderIntentWords.any { raw.contains(it) || normalized.contains(AgentAliasNormalizer.normalize(it)) }
         val creatorType = when {
             sellWords.any { raw.contains(it) } -> PublishCreatorType.SELL
             buyWords.any { raw.contains(it) } -> PublishCreatorType.BUY
             else -> null
         }
+        val isIntent = orderIntentWords.any { raw.contains(it) || normalized.contains(AgentAliasNormalizer.normalize(it)) } ||
+            (creatorType != null && (hasPrice(raw) || locationRegex.containsMatchIn(raw) || raw.contains("订单") || raw.contains("挂单")))
         val quantity = explicitQuantityRegex.find(raw)?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: quantityRegex.findAll(raw).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.firstOrNull()
             ?: 1
-        val unitPrice = labeledPriceRegex.find(raw)?.groupValues?.getOrNull(1)?.toBigDecimalOrNull()
-            ?: raw.split(punctuation)
-                .firstOrNull { it.contains("单价") || it.contains("价格") || it.contains("售价") || it.contains("收购价") }
-                ?.let { priceRegex.find(it)?.groupValues?.getOrNull(1)?.toBigDecimalOrNull() }
-        val location = locationRegex.find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+        val unitPrice = parsePrice(raw)
+        val location = cleanLocation(locationRegex.find(raw)?.groupValues?.getOrNull(1).orEmpty())
         return ScmOrderDraftParseResult(
             isOrderIntent = isIntent,
             creatorType = creatorType,
@@ -81,8 +99,9 @@ object ScmOrderDraftParser {
             next.unitPrice == null &&
             next.locationKeyword.isBlank()
         val inferredLocation = if ("交易地点" in missing && looksLikePlainValue) raw else ""
-        val inferredItem = if ("物品" in missing && looksLikePlainValue) raw else ""
-        val inferredPrice = if ("单价" in missing) priceRegex.find(raw)?.groupValues?.getOrNull(1)?.toBigDecimalOrNull() else null
+        val cleanedFollowUp = cleanFollowUpValue(raw)
+        val inferredItem = if ("物品" in missing && (looksLikePlainValue || cleanedFollowUp != raw)) cleanedFollowUp else ""
+        val inferredPrice = if ("单价" in missing) parsePrice(raw) else null
         return ScmOrderDraftParseResult(
             isOrderIntent = true,
             creatorType = next.creatorType ?: pending.creatorType,
@@ -109,6 +128,11 @@ object ScmOrderDraftParser {
             .split(punctuation)
             .firstOrNull()
             .orEmpty()
+            .replace(locationRegex, "")
+            .replace(quantityRegex, "")
+            .replace(explicitQuantityRegex, "")
+            .replace(moneyTextRegex, "")
+            .replace(orderFillerRegex, "")
             .replace(Regex("""^(一个|一件|一把|订单|挂单)\s*"""), "")
             .replace(Regex("""\s+\d+\s*(?:个|件|把|份|台|组).*$"""), "")
             .replace(Regex("""数量\s*\d+.*$"""), "")
@@ -120,4 +144,37 @@ object ScmOrderDraftParser {
 
     private fun hasQuantity(raw: String): Boolean =
         explicitQuantityRegex.containsMatchIn(raw) || quantityRegex.containsMatchIn(raw)
+
+    private fun hasPrice(raw: String): Boolean =
+        labeledPriceRegex.containsMatchIn(raw) || moneyWithUnitRegex.containsMatchIn(raw)
+
+    private fun parsePrice(raw: String): BigDecimal? {
+        val match = labeledPriceRegex.find(raw)
+            ?: raw.split(punctuation)
+                .firstOrNull { it.contains("单价") || it.contains("价格") || it.contains("售价") || it.contains("收购价") }
+                ?.let { priceRegex.find(it) }
+            ?: moneyWithUnitRegex.find(raw)
+        return match?.let(::parseMoneyMatch)
+    }
+
+    private fun parseMoneyMatch(match: MatchResult): BigDecimal? {
+        val amount = match.groupValues.getOrNull(1)?.toBigDecimalOrNull() ?: return null
+        val unit = match.groupValues.getOrNull(2).orEmpty().lowercase()
+        return if (unit == "w" || unit == "万") {
+            amount.multiply(BigDecimal("10000"))
+        } else {
+            amount
+        }
+    }
+
+    private fun cleanLocation(value: String): String =
+        value.trim()
+            .removePrefix("是")
+            .removePrefix("在")
+            .trim()
+
+    private fun cleanFollowUpValue(raw: String): String =
+        raw.replace(followUpNoiseRegex, "")
+            .replace(punctuation, "")
+            .trim()
 }

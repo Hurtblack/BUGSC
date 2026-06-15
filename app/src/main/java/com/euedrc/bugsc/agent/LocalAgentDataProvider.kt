@@ -74,6 +74,16 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
                     ),
                 )
             }
+            wikelo.materials.forEach { material ->
+                add(
+                    AgentEntity(
+                        type = "wikelo_material",
+                        value = material.nameEn,
+                        displayName = material.nameCn,
+                        aliases = AgentAliasNormalizer.expandAliases(material.nameCn, material.nameEn),
+                    ),
+                )
+            }
         }
         return AgentEntityIndex(entries)
     }

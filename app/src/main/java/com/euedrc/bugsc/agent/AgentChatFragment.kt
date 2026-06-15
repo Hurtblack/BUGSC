@@ -138,10 +138,17 @@ class AgentChatFragment : Fragment() {
             return
         }
         lifecycleScope.launch {
+            val index = localProvider.entityIndex()
             val resolution = withContext(Dispatchers.IO) {
                 runCatching {
                     ScmOrderDraftResolver(
-                        itemSearch = { marketPublishClient.searchItems(it) },
+                        itemSearch = { keyword ->
+                            ScmSearchTermExpander.expand(keyword, index)
+                                .asSequence()
+                                .map { marketPublishClient.searchItems(it) }
+                                .firstOrNull { it.isNotEmpty() }
+                                .orEmpty()
+                        },
                         addressList = { transactionClient.addressList() },
                     ).resolve(parsed)
                 }.getOrElse { ScmOrderDraftResolution.NeedMoreInfo(it.message ?: "订单草稿解析失败。") }
@@ -181,7 +188,7 @@ class AgentChatFragment : Fragment() {
             deepSeekClient = DeepSeekClient(UrlConnectionDeepSeekTransport()),
             settingsProvider = { settingsStore.settings() },
             planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(AgentLocalSearchTools.create(localProvider, index) + ScmAgentTools.create()),
+            toolRegistry = AgentToolRegistry(AgentLocalSearchTools.create(localProvider, index) + ScmAgentTools.create(entityIndex = index)),
         )
     }
 

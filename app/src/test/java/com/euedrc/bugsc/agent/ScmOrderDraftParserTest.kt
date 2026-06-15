@@ -23,6 +23,19 @@ class ScmOrderDraftParserTest {
     }
 
     @Test
+    fun parsesNaturalSellOrderWithWanPriceAndLocationAlias() {
+        val draft = ScmOrderDraftParser.parse("我想卖一个绝杀 50wuec 地点是死局")
+
+        assertTrue(draft.isOrderIntent)
+        assertEquals(PublishCreatorType.SELL, draft.creatorType)
+        assertEquals("绝杀", draft.itemKeyword)
+        assertEquals(1, draft.quantity)
+        assertEquals(BigDecimal("500000"), draft.unitPrice)
+        assertEquals("死局", draft.locationKeyword)
+        assertTrue(draft.isReadyForResolution)
+    }
+
+    @Test
     fun parsesBuyOrderDraftWithDefaults() {
         val draft = ScmOrderDraftParser.parse("求购 石英 3 个 单价 1000 地点 洛维尔")
 
@@ -59,5 +72,17 @@ class ScmOrderDraftParserTest {
         assertEquals(BigDecimal("50000"), merged.unitPrice)
         assertEquals("死局", merged.locationKeyword)
         assertTrue(merged.isReadyForResolution)
+    }
+
+    @Test
+    fun mergesItemNameFromNaturalFollowUp() {
+        val pending = ScmOrderDraftParser.parse("我想卖 50wuec 地点是死局")
+
+        val merged = ScmOrderDraftParser.mergeFollowUp(pending, "就叫绝杀你搜一下scm")
+
+        assertTrue(merged.isOrderIntent)
+        assertEquals("绝杀", merged.itemKeyword)
+        assertEquals(BigDecimal("500000"), merged.unitPrice)
+        assertEquals("死局", merged.locationKeyword)
     }
 }

@@ -131,6 +131,26 @@ class AgentHermesWorkflowTest {
     }
 
     @Test
+    fun marketWorkflowCleansNaturalScmSearchPhraseBeforeToolCall() = runBlocking {
+        val item = RecordingTool("search_scm_item")
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
+            toolRegistry = AgentToolRegistry(listOf(item, RecordingTool("search_market"))),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
+                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
+                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"按工具结果总结"}}]}""")
+            }),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+        )
+
+        runtime.answer("就叫绝杀你搜一下scm")
+
+        assertEquals(listOf("绝杀"), item.calls.map { it.args["term"] })
+    }
+
+    @Test
     fun globalIndexMatchesShortChineseAliasInsideTranslatedName() = runBlocking {
         val registry = AgentToolRegistry(
             AgentLocalSearchTools.create(

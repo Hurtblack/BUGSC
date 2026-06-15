@@ -146,7 +146,8 @@ class AgentPlanner(private val skillCards: List<AgentSkillCard>) {
     companion object {
         private const val MAX_CARDS = 3
         private val NOISE_WORDS = Regex(
-            """(请问|帮我|查一下|查询|查|蓝图|怎么做|怎么弄|如何做|如何制作|制作|材料|任务|来源|哪里来|哪里拿|哪里|在哪|获得|获取|做|弄|是什么|什么|信息|攻略)""",
+            """(请问|帮我|查一下|查询|查|搜一下|搜|就叫|叫|名称是|名字是|物品是|东西是|你|scm|蓝图|怎么做|怎么弄|如何做|如何制作|制作|材料|任务|来源|哪里来|哪里拿|哪里|在哪|获得|获取|做|弄|是什么|什么|信息|攻略)""",
+            RegexOption.IGNORE_CASE,
         )
     }
 }

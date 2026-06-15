@@ -31,15 +31,19 @@ class DefaultScmAgentGateway(
 }
 
 object ScmAgentTools {
-    fun create(gateway: ScmAgentGateway = DefaultScmAgentGateway()): List<AgentTool> = listOf(
-        ScmBlueprintSearchTool(gateway),
-        ScmItemSearchTool(gateway),
-        ScmMarketOrderSearchTool(gateway),
+    fun create(
+        gateway: ScmAgentGateway = DefaultScmAgentGateway(),
+        entityIndex: AgentEntityIndex = AgentEntityIndex(),
+    ): List<AgentTool> = listOf(
+        ScmBlueprintSearchTool(gateway, entityIndex),
+        ScmItemSearchTool(gateway, entityIndex),
+        ScmMarketOrderSearchTool(gateway, entityIndex),
     )
 }
 
 class ScmBlueprintSearchTool(
     private val gateway: ScmAgentGateway,
+    private val entityIndex: AgentEntityIndex = AgentEntityIndex(),
 ) : AgentTool {
     override val name: String = "search_scm_blueprint"
     override val description: String = "SCM 蓝图查询"
@@ -47,9 +51,17 @@ class ScmBlueprintSearchTool(
     override suspend fun run(call: AgentToolCall): AgentToolResult {
         val term = call.args["term"].orEmpty().trim()
         if (term.isBlank()) return noResult(call, "SCM 蓝图未命中")
-        val encoded = URLEncoder.encode(term, "UTF-8")
-        val root = gateway.request("/product/blueprint/page?pageNo=1&pageSize=5&keyword=$encoded")
-        val list = root.optJSONObject("data")?.optJSONArray("list") ?: JSONArray()
+        val list = ScmSearchTermExpander.expand(term, entityIndex)
+            .asSequence()
+            .map { candidate ->
+                val encoded = URLEncoder.encode(candidate, "UTF-8")
+                gateway.request("/product/blueprint/page?pageNo=1&pageSize=5&keyword=$encoded")
+                    .optJSONObject("data")
+                    ?.optJSONArray("list")
+                    ?: JSONArray()
+            }
+            .firstOrNull { it.length() > 0 }
+            ?: JSONArray()
         val items = (0 until list.length()).mapNotNull { list.optJSONObject(it) }
         if (items.isEmpty()) return noResult(call, "SCM 蓝图未命中")
         val summaries = items.take(3).map { it.blueprintDisplayName() }
@@ -73,6 +85,7 @@ class ScmBlueprintSearchTool(
 
 class ScmItemSearchTool(
     private val gateway: ScmAgentGateway,
+    private val entityIndex: AgentEntityIndex = AgentEntityIndex(),
 ) : AgentTool {
     override val name: String = "search_scm_item"
     override val description: String = "SCM 物品查询"
@@ -80,7 +93,12 @@ class ScmItemSearchTool(
     override suspend fun run(call: AgentToolCall): AgentToolResult {
         val term = call.args["term"].orEmpty().trim()
         if (term.isBlank()) return noResult(call, "SCM 物品未命中")
-        val items = gateway.searchItems(term).take(5)
+        val items = ScmSearchTermExpander.expand(term, entityIndex)
+            .asSequence()
+            .map { gateway.searchItems(it) }
+            .firstOrNull { it.isNotEmpty() }
+            ?.take(5)
+            .orEmpty()
         if (items.isEmpty()) return noResult(call, "SCM 物品未命中")
         return AgentToolResult(
             call = call,
@@ -99,6 +117,7 @@ class ScmItemSearchTool(
 
 class ScmMarketOrderSearchTool(
     private val gateway: ScmAgentGateway,
+    private val entityIndex: AgentEntityIndex = AgentEntityIndex(),
 ) : AgentTool {
     override val name: String = "search_market"
     override val description: String = "SCM 市场订单查询"
@@ -106,10 +125,16 @@ class ScmMarketOrderSearchTool(
     override suspend fun run(call: AgentToolCall): AgentToolResult {
         val term = call.args["term"].orEmpty().trim()
         if (term.isBlank()) return noResult(call, "SCM 市场未命中")
-        val orders = gateway.searchOrders(term)
-            .filter { it.remainingQuantity > 0 }
-            .sortedBy { it.unitPrice }
-            .take(5)
+        val orders = ScmSearchTermExpander.expand(term, entityIndex)
+            .asSequence()
+            .map { candidate ->
+                gateway.searchOrders(candidate)
+                    .filter { it.remainingQuantity > 0 }
+                    .sortedBy { it.unitPrice }
+                    .take(5)
+            }
+            .firstOrNull { it.isNotEmpty() }
+            .orEmpty()
         if (orders.isEmpty()) return noResult(call, "SCM 市场未命中")
         return AgentToolResult(
             call = call,
@@ -139,6 +164,46 @@ private fun noResult(call: AgentToolCall, summary: String): AgentToolResult =
         sources = listOf(AgentSource(summary.substringBefore("未命中"), "remote")),
         confidence = 0f,
     )
+
+object ScmSearchTermExpander {
+    private val noise = Regex(
+        """(请问|帮我|查一下|查询|查|搜一下|搜|就叫|叫|名称是|名字是|物品是|东西是|你|scm|市场|订单|挂单)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun expand(term: String, entityIndex: AgentEntityIndex): List<String> {
+        val cleaned = clean(term)
+        val compact = AgentAliasNormalizer.compact(cleaned)
+        val candidates = LinkedHashSet<String>()
+        fun add(value: String?) {
+            value?.trim()?.takeIf { it.length >= 2 }?.let { candidates += it }
+        }
+        add(cleaned)
+        add(term)
+        if (compact.length >= 2) {
+            entityIndex.entries.forEach { entity ->
+                val values = listOf(entity.displayName, entity.value) + entity.aliases
+                if (values.any { fuzzyContains(it, compact) }) {
+                    add(entity.displayName)
+                    add(entity.value)
+                    entity.aliases.forEach(::add)
+                }
+            }
+        }
+        return candidates.toList()
+    }
+
+    fun clean(term: String): String =
+        term.replace(noise, " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+
+    private fun fuzzyContains(value: String, compactTerm: String): Boolean {
+        val compactValue = AgentAliasNormalizer.compact(value)
+        return compactValue.length >= 2 &&
+            (compactValue.contains(compactTerm) || compactTerm.contains(compactValue))
+    }
+}
 
 private fun JSONObject.blueprintDisplayName(): String {
     val cn = optString("blueprintNameCn").trim()
