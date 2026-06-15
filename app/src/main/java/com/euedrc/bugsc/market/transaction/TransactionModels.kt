@@ -114,8 +114,9 @@ object TransactionActionPolicy {
     fun visibleActions(record: TransactionRecord, currentUserId: Long): List<TransactionAction> {
         if (currentUserId <= 0 || record.transactionStatus != 1) return emptyList()
         val sellerId = if (record.creatorType == 1) record.orderOwnerId else record.tradingerId
+        val buyerId = if (record.creatorType == 1) record.tradingerId else record.orderOwnerId
         return buildList {
-            if (record.deliveryStatus == 0 && currentUserId == record.tradingerId) {
+            if (record.deliveryStatus == 0 && currentUserId == buyerId) {
                 add(TransactionAction.CANCEL)
             }
             if (record.deliveryStatus == 1 && currentUserId == sellerId) {

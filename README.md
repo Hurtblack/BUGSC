@@ -228,6 +228,12 @@ python3 tools/export_location_translations.py
 # 输出：app/build/outputs/apk/debug/SCMobiGlas-debug-v{versionName}.apk
 ```
 
+## 发布规则
+
+公开源码和正式 APK Release 分开管理：公开源码版本不包含 SCM 账号、交易、聊天等受保护后端接口链路；正式 APK 可由本地或私有仓库的完整代码构建。
+
+具体规则见 [`docs/release-policy.md`](docs/release-policy.md)。
+
 ---
 
 ## 已知限制

@@ -15,6 +15,7 @@ import com.euedrc.bugsc.ImageLoader
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.requireScmLogin
 import com.euedrc.bugsc.ui.ImagePreviewDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,6 +61,11 @@ class MarketFragment : Fragment() {
         btnLoadMore = view.findViewById(R.id.btn_load_more)
         scrollView = view.findViewById(R.id.scroll_view)
 
+        view.findViewById<View>(R.id.btn_market_create).setOnClickListener {
+            requireScmLogin {
+                findNavController().navigate(R.id.MarketOrderEditFragment)
+            }
+        }
         btnTabSell.setOnClickListener { switchTab(TAB_SELL) }
         btnTabBuy.setOnClickListener { switchTab(TAB_BUY) }
         btnSearch.setOnClickListener { doSearch() }

@@ -7,13 +7,23 @@ import java.math.BigDecimal
 
 class TransactionActionPolicyTest {
     @Test
-    fun pendingApprovalTransactionCanBeCancelledByTransactionCreator() {
+    fun pendingApprovalBuyOrderCanBeCancelledByBuyer() {
+        val actions = TransactionActionPolicy.visibleActions(
+            record(creatorType = 0, deliveryStatus = 0),
+            currentUserId = 100,
+        )
+
+        assertEquals(listOf(TransactionAction.CANCEL), actions)
+    }
+
+    @Test
+    fun pendingApprovalBuyOrderCannotBeCancelledBySeller() {
         val actions = TransactionActionPolicy.visibleActions(
             record(creatorType = 0, deliveryStatus = 0),
             currentUserId = 200,
         )
 
-        assertEquals(listOf(TransactionAction.CANCEL), actions)
+        assertTrue(actions.isEmpty())
     }
 
     @Test

@@ -345,25 +345,41 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:visibility="gone">
 
-                <Button
-                    android:id="@+id/btn_scm_transactions"
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/button_outline_accent"
-                    android:text="我的交易"
-                    android:textAllCaps="false"
-                    android:textColor="@color/sc_accent" />
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btn_scm_orders"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/button_outline_accent"
+                        android:text="我的挂单"
+                        android:textAllCaps="false"
+                        android:textColor="@color/sc_accent" />
+
+                    <Button
+                        android:id="@+id/btn_scm_transactions"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:background="@drawable/button_outline_accent"
+                        android:text="我的交易"
+                        android:textAllCaps="false"
+                        android:textColor="@color/sc_accent" />
+                </LinearLayout>
 
                 <Button
                     android:id="@+id/btn_scm_messages"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_marginTop="8dp"
                     android:background="@drawable/button_outline_accent"
                     android:text="消息"
                     android:textAllCaps="false"

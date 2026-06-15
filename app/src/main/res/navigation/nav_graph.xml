@@ -160,6 +160,18 @@
     </fragment>
 
     <fragment
+        android:id="@+id/MarketOrderEditFragment"
+        android:name="com.euedrc.bugsc.market.publish.MarketOrderEditFragment"
+        android:label="创建挂单"
+        tools:layout="@layout/fragment_market_order_edit" />
+
+    <fragment
+        android:id="@+id/MyMarketOrdersFragment"
+        android:name="com.euedrc.bugsc.market.publish.MyMarketOrdersFragment"
+        android:label="我的挂单"
+        tools:layout="@layout/fragment_my_market_orders" />
+
+    <fragment
         android:id="@+id/TransactionListFragment"
         android:name="com.euedrc.bugsc.market.transaction.TransactionListFragment"
         android:label="我的交易"

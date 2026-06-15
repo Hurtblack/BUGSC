@@ -54,6 +54,9 @@ class ProfileFragment : Fragment() {
         }
         binding.btnScmLogout.setOnClickListener { logoutScm() }
         binding.btnScmSignin.setOnClickListener { doSignIn() }
+        binding.btnScmOrders.setOnClickListener {
+            findNavController().navigate(R.id.MyMarketOrdersFragment)
+        }
         binding.btnScmTransactions.setOnClickListener {
             findNavController().navigate(R.id.TransactionListFragment)
         }
