@@ -31,7 +31,7 @@ object ScmOrderDraftParser {
     private val orderIntentWords = listOf("创建订单", "创建一个订单", "创建挂单", "发布订单", "发布挂单", "帮我创建", "挂单", "求购", "出售")
     private val sellWords = listOf("出售", "卖", "售卖")
     private val buyWords = listOf("求购", "收购", "买")
-    private val quantityRegex = Regex("""(?:数量\s*)?(\d+)\s*(?:个|件|把|份|台|组)\b?""")
+    private val quantityRegex = Regex("""(?:数量\s*)?(\d+)\s*(?:个|件|把|份|台|组)""")
     private val explicitQuantityRegex = Regex("""数量\s*(\d+)""")
     private val priceRegex = Regex("""(?:单价|价格|售价|收购价)?\s*(\d+(?:\.\d+)?)\s*(?:auec|uec|元|块)?""", RegexOption.IGNORE_CASE)
     private val labeledPriceRegex = Regex("""(?:单价|价格|售价|收购价)\s*(\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
