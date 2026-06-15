@@ -36,7 +36,9 @@ class ScmOrderDraftResolver(
             return ScmOrderDraftResolution.NeedMoreInfo("这不像创建订单请求。")
         }
         if (!parsed.isReadyForResolution) {
-            return ScmOrderDraftResolution.NeedMoreInfo("还缺：${parsed.missingFields.joinToString("、")}。")
+            return ScmOrderDraftResolution.NeedMoreInfo(
+                "还缺：${parsed.missingFields.joinToString("、")}。\n可以直接回复缺的内容，比如“死局”或“单价 50000”。",
+            )
         }
         val item = itemSearch(parsed.itemKeyword).firstOrNull()
             ?: return ScmOrderDraftResolution.NeedMoreInfo("没有找到物品：${parsed.itemKeyword}。可以换中文名或英文名。")

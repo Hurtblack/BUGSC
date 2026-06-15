@@ -71,6 +71,33 @@ object ScmOrderDraftParser {
         )
     }
 
+    fun mergeFollowUp(pending: ScmOrderDraftParseResult, text: String): ScmOrderDraftParseResult {
+        val raw = text.trim()
+        val next = parse(raw)
+        val missing = pending.missingFields.toSet()
+        val looksLikePlainValue = raw.isNotBlank() &&
+            next.creatorType == null &&
+            next.itemKeyword.isBlank() &&
+            next.unitPrice == null &&
+            next.locationKeyword.isBlank()
+        val inferredLocation = if ("交易地点" in missing && looksLikePlainValue) raw else ""
+        val inferredItem = if ("物品" in missing && looksLikePlainValue) raw else ""
+        val inferredPrice = if ("单价" in missing) priceRegex.find(raw)?.groupValues?.getOrNull(1)?.toBigDecimalOrNull() else null
+        return ScmOrderDraftParseResult(
+            isOrderIntent = true,
+            creatorType = next.creatorType ?: pending.creatorType,
+            itemKeyword = next.itemKeyword.ifBlank { inferredItem.ifBlank { pending.itemKeyword } },
+            quantity = if (hasQuantity(raw)) next.quantity else pending.quantity,
+            unitPrice = next.unitPrice ?: inferredPrice ?: pending.unitPrice,
+            locationKeyword = next.locationKeyword.ifBlank { inferredLocation.ifBlank { pending.locationKeyword } },
+            status = if (raw.contains("下架") || raw.contains("隐藏")) next.status else pending.status,
+            expireTime = when {
+                raw.contains("永久") || raw.contains("14天") || raw.contains("十四天") -> next.expireTime
+                else -> pending.expireTime
+            },
+        )
+    }
+
     private fun extractItem(raw: String, creatorType: PublishCreatorType?): String {
         val marker = when (creatorType) {
             PublishCreatorType.SELL -> sellWords.firstOrNull { raw.contains(it) }
@@ -90,4 +117,7 @@ object ScmOrderDraftParser {
             .replace(Regex("""地点\s*.*$"""), "")
             .trim()
     }
+
+    private fun hasQuantity(raw: String): Boolean =
+        explicitQuantityRegex.containsMatchIn(raw) || quantityRegex.containsMatchIn(raw)
 }

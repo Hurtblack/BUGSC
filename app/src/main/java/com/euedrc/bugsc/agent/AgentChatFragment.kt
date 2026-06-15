@@ -41,6 +41,7 @@ class AgentChatFragment : Fragment() {
     private val transactionClient: TransactionClient by lazy { TransactionClient() }
     private var conversationVersion: Long = 0L
     private var pendingOrderDraft: ScmOrderDraftResolution.Resolved? = null
+    private var pendingOrderParse: ScmOrderDraftParseResult? = null
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_agent_chat, parent, false)
@@ -91,7 +92,12 @@ class AgentChatFragment : Fragment() {
     private fun sendMessage() {
         val text = input.text.toString().trim()
         if (text.isBlank()) return
-        val orderDraft = ScmOrderDraftParser.parse(text)
+        val pendingParse = pendingOrderParse
+        val orderDraft = if (pendingParse != null) {
+            ScmOrderDraftParser.mergeFollowUp(pendingParse, text)
+        } else {
+            ScmOrderDraftParser.parse(text)
+        }
         if (orderDraft.isOrderIntent) {
             sendOrderDraftMessage(text, orderDraft)
             return
@@ -142,8 +148,12 @@ class AgentChatFragment : Fragment() {
             }
             if (!isAdded || requestVersion != conversationVersion) return@launch
             when (resolution) {
-                is ScmOrderDraftResolution.NeedMoreInfo -> appendAssistantMessage(resolution.message)
+                is ScmOrderDraftResolution.NeedMoreInfo -> {
+                    pendingOrderParse = parsed
+                    appendAssistantMessage(resolution.message)
+                }
                 is ScmOrderDraftResolution.Resolved -> {
+                    pendingOrderParse = null
                     pendingOrderDraft = resolution
                     appendAssistantMessage(resolution.confirmationMarkdown())
                     addOrderActions(resolution)
@@ -156,6 +166,7 @@ class AgentChatFragment : Fragment() {
     private fun startNewChat() {
         conversationVersion += 1L
         pendingOrderDraft = null
+        pendingOrderParse = null
         historyStore.clear()
         input.setText("")
         renderHistory()
@@ -224,6 +235,7 @@ class AgentChatFragment : Fragment() {
             isAllCaps = false
             setOnClickListener {
                 if (pendingOrderDraft == draft) pendingOrderDraft = null
+                pendingOrderParse = null
                 appendAssistantMessage("已取消创建订单。")
                 row.visibility = View.GONE
             }
@@ -239,6 +251,7 @@ class AgentChatFragment : Fragment() {
             return
         }
         pendingOrderDraft = null
+        pendingOrderParse = null
         appendAssistantMessage("正在创建 SCM 订单…")
         lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {

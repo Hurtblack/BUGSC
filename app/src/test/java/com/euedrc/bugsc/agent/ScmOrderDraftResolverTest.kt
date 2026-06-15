@@ -61,4 +61,21 @@ class ScmOrderDraftResolverTest {
         assertTrue(result is ScmOrderDraftResolution.NeedMoreInfo)
         assertTrue((result as ScmOrderDraftResolution.NeedMoreInfo).message.contains("没有找到物品"))
     }
+
+    @Test
+    fun fuzzyMatchesShortLocationAlias() {
+        val resolver = ScmOrderDraftResolver(
+            itemSearch = {
+                listOf(ItemSearchResult(42, "绝杀步枪", "", "", "Killshot Rifle"))
+            },
+            addressList = {
+                listOf(AddressNode(99, 0, "死局空间站"))
+            },
+        )
+
+        val result = resolver.resolve(ScmOrderDraftParser.parse("出售 绝杀步枪 1 个 单价 50000 地点 死局"))
+
+        assertTrue(result is ScmOrderDraftResolution.Resolved)
+        assertEquals("死局空间站", (result as ScmOrderDraftResolution.Resolved).location.name)
+    }
 }

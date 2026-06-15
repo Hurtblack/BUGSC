@@ -45,4 +45,19 @@ class ScmOrderDraftParserTest {
         assertTrue(draft.missingFields.contains("单价"))
         assertTrue(draft.missingFields.contains("交易地点"))
     }
+
+    @Test
+    fun mergesFollowUpAnswerIntoPendingDraft() {
+        val pending = ScmOrderDraftParser.parse("出售 绝杀步枪 1 个 单价 50000")
+
+        val merged = ScmOrderDraftParser.mergeFollowUp(pending, "死局")
+
+        assertTrue(merged.isOrderIntent)
+        assertEquals(PublishCreatorType.SELL, merged.creatorType)
+        assertEquals("绝杀步枪", merged.itemKeyword)
+        assertEquals(1, merged.quantity)
+        assertEquals(BigDecimal("50000"), merged.unitPrice)
+        assertEquals("死局", merged.locationKeyword)
+        assertTrue(merged.isReadyForResolution)
+    }
 }
