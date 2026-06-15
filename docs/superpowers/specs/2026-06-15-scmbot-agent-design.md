@@ -8,8 +8,8 @@ SCMobiGlas 需要在 App 内提供一个专门解决 Star Citizen 问题的助�
 
 ## 第一版目标
 
-- 在个人信息页提供 SCMBOT 助手入口和 DeepSeek API 设置入口。
-- 用户填写自己的 DeepSeek API Key 后，可以打开 SCMBOT 对话。
+- 在工具页提供 SCMBOT 助手入口，用户点击后直接进入 SCMBOT 对话。
+- 用户填写自己的 DeepSeek API Key 后，可以在 SCMBOT 对话中发送问题并获得回答。
 - SCMBOT 复用现有聊天页视觉风格，显示为固定角色 `SCMBOT`。
 - App 先调用内置 Skill 查询结构化数据，再把工具结果交给 DeepSeek 归纳回答。
 - Skill 第一版覆盖本地数据查询、当前已知查询 API 和可用的 SCM API 查询。
@@ -26,11 +26,13 @@ SCMobiGlas 需要在 App 内提供一个专门解决 Star Citizen 问题的助�
 
 ## 产品形态
 
-个人信息页新增一块 `SCMBOT 助手`：
+工具页新增一个 `SCMBOT 助手` 工具卡：
 
-- 未配置 DeepSeek 时显示 `未配置`，主按钮为 `设置模型`。
-- 已配置时显示 `已配置 DeepSeek`，主按钮为 `打开 SCMBOT`。
-- 设置页包含 API Key、模型选择和连接测试。
+- 点击工具卡直接打开 SCMBOT 聊天页。
+- SCMBOT 聊天页顶部显示固定角色 `SCMBOT` 和简短状态。
+- 未配置 DeepSeek 时仍可进入聊天页，但输入区显示配置引导，发送时弹出设置入口。
+- 聊天页内提供 `设置模型` 入口，设置页包含 API Key、模型选择和连接测试。
+- 配置完成后返回聊天页，用户可以直接开始对话。
 
 第一版模型选择：
 
@@ -52,6 +54,7 @@ DeepSeek 官方 OpenAI-compatible 配置：
 
 - SCM 私聊继续使用现有 SCM REST 和 WebSocket。
 - SCMBOT 使用本地 Agent 会话后端。
+- SCMBOT 入口位于工具页，不依赖个人信息页或 SCM 登录态。
 
 实现上可以选择：
 
@@ -75,6 +78,17 @@ SCMBOT 的处理流程：
 模型只负责总结、比较、推理和表达。事实数据优先来自工具结果。
 
 ## 模块
+
+### ToolsFragment 入口
+
+工具页新增 SCMBOT 工具卡，行为与其他工具入口一致：
+
+- 标题：`SCMBOT`
+- 副标题：`游戏资料、蓝图、矿物、任务与攻略助手`
+- 点击后导航到 `ScmBotChatFragment`
+- 不因 DeepSeek 未配置而隐藏入口
+
+DeepSeek 配置状态可以作为工具卡的次要状态展示，但不能阻止进入聊天页。配置引导由聊天页负责。
 
 ### AgentSettingsStore
 
@@ -202,6 +216,7 @@ SCM API 是 Agent 的工具源之一，不是后端 Agent：
 集成或手工验证：
 
 - 未配置 DeepSeek 时入口和提示正确。
+- 工具页点击 SCMBOT 可直接进入聊天页。
 - 填写 DeepSeek Key 后连接测试可用。
 - 打开 SCMBOT 后可发送问题并显示回答。
 - 查询矿物、蓝图、任务、船只时能命中本地数据。
@@ -211,11 +226,12 @@ SCM API 是 Agent 的工具源之一，不是后端 Agent：
 ## 实施顺序
 
 1. 新建 SCMBOT 分支和设计文档。
-2. 添加 DeepSeek 设置模型、存储和设置 UI。
-3. 新建 SCMBOT 聊天入口和本地聊天历史。
-4. 实现 DeepSeekAgentClient 和连接测试。
-5. 提取或复用聊天气泡渲染，完成 SCMBOT 对话页。
-6. 实现第一批本地 Skill。
-7. 接入当前已知查询 API Skill。
-8. 接入 SCM API Skill 的公开查询能力。
-9. 补充测试和实机验证。
+2. 在工具页新增 SCMBOT 入口。
+3. 添加 DeepSeek 设置模型、存储和设置 UI。
+4. 新建 SCMBOT 聊天页和本地聊天历史。
+5. 实现 DeepSeekAgentClient 和连接测试。
+6. 提取或复用聊天气泡渲染，完成 SCMBOT 对话页。
+7. 实现第一批本地 Skill。
+8. 接入当前已知查询 API Skill。
+9. 接入 SCM API Skill 的公开查询能力。
+10. 补充测试和实机验证。
