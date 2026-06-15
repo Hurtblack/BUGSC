@@ -32,6 +32,7 @@ class AgentChatFragment : Fragment() {
     private lateinit var settingsStore: AgentSettingsStore
     private lateinit var historyStore: AgentHistoryStore
     private val localProvider: LocalAgentDataProvider by lazy { LocalAgentDataProvider(requireContext()) }
+    private var conversationVersion: Long = 0L
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_agent_chat, parent, false)
@@ -88,25 +89,27 @@ class AgentChatFragment : Fragment() {
             findNavController().navigate(R.id.AgentSettingsFragment)
             return
         }
+        val requestVersion = conversationVersion
+        val historyBeforeSend = historyStore.load()
         val userMsg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.USER, text, System.currentTimeMillis(), AgentMessageStatus.SENT)
         historyStore.append(userMsg)
         addBubble(text, mine = true)
         input.setText("")
         lifecycleScope.launch {
             val answer = withContext(Dispatchers.IO) {
-                runCatching { buildRuntime().answer(text, historyStore.load()) }
+                runCatching { buildRuntime().answer(text, historyBeforeSend) }
                     .getOrElse { it.message ?: getString(R.string.agent_request_failed) }
             }
+            if (!isAdded || requestVersion != conversationVersion) return@launch
             val msg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.ASSISTANT, answer, System.currentTimeMillis(), AgentMessageStatus.SENT)
             historyStore.append(msg)
-            if (isAdded) {
-                addBubble(answer, mine = false)
-                scrollToBottom()
-            }
+            addBubble(answer, mine = false)
+            scrollToBottom()
         }
     }
 
     private fun startNewChat() {
+        conversationVersion += 1L
         historyStore.clear()
         input.setText("")
         renderHistory()
