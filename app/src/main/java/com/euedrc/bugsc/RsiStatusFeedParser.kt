@@ -33,7 +33,7 @@ object RsiStatusFeedParser {
             val item = items.item(i) as? Element ?: continue
             val title = item.getChildText("title")
             val description = item.getChildText("description")
-            if (title.contains("[Resolved]", ignoreCase = true)) continue
+            if (title.contains("[Resolved]", ignoreCase = true)) break
 
             val severity = classifySeverity(title, description)
             if (matchesPlatform(title, description)) {
@@ -57,23 +57,31 @@ object RsiStatusFeedParser {
     private fun classifySeverity(title: String, description: String): ServiceStatusLevel {
         val text = "$title $description".lowercase()
         return when {
-            text.contains("maintenance") || text.contains("intermittently") -> ServiceStatusLevel.DEGRADED
-            text.contains("disruption") ||
+            text.contains("maintenance") ||
                 text.contains("outage") ||
+                text.contains("offline") ||
                 text.contains("unavailable") ||
-                text.contains("preventing players") ||
-                text.contains("error rates") -> ServiceStatusLevel.OUTAGE
+                text.contains("servers down") -> ServiceStatusLevel.OUTAGE
             else -> ServiceStatusLevel.DEGRADED
         }
     }
 
     private fun matchesPlatform(title: String, description: String): Boolean {
-        val text = "$title $description".lowercase()
-        return text.contains("platform") ||
-            text.contains("launcher") ||
-            text.contains("website") ||
-            text.contains("spectrum") ||
-            text.contains("api ")
+        val normalizedTitle = title.lowercase()
+        if (normalizedTitle.contains("platform")) return true
+        if (
+            normalizedTitle.contains("live service") ||
+            normalizedTitle.contains("persistent universe") ||
+            normalizedTitle.contains("arena commander")
+        ) {
+            return false
+        }
+
+        val normalizedDescription = description.lowercase()
+        return normalizedDescription.contains("launcher") ||
+            normalizedDescription.contains("website") ||
+            normalizedDescription.contains("spectrum") ||
+            normalizedDescription.contains("api ")
     }
 
     private fun matchesPersistentUniverse(title: String, description: String): Boolean {
