@@ -117,12 +117,12 @@ class AgentChatFragment : Fragment() {
 
     private fun addBubble(text: String, mine: Boolean) {
         val bubble = TextView(requireContext()).apply {
-            this.text = text
             textSize = 14f
             setTextColor(if (mine) "#001119".toColorInt() else "#d8eaf2".toColorInt())
             setBackgroundResource(if (mine) R.drawable.chat_bubble_outgoing else R.drawable.chat_bubble_incoming)
             setPadding(dp(10), dp(8), dp(10), dp(8))
             typeface = Typeface.DEFAULT
+            AgentMarkdownFormatter.bind(this, text, mine)
         }
         val row = LinearLayout(requireContext()).apply {
             gravity = if (mine) Gravity.END else Gravity.START
