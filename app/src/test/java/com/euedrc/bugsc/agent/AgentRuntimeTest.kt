@@ -45,6 +45,24 @@ class AgentRuntimeTest {
     }
 
     @Test
+    fun noResultStillAllowsModelReasoning() = runBlocking {
+        val runtime = runtime(
+            result = SkillResult(
+                skillId = "blueprint",
+                summary = "蓝图资料 未命中相关数据",
+                facts = emptyList(),
+                sources = listOf(AgentSource("蓝图资料", "local")),
+                confidence = 0f,
+            ),
+            modelContent = "本地资料没有直接命中石英蓝图；按制作问题分析，你应先确认石英是否是材料名还是成品名。",
+        )
+
+        val answer = runtime.answer("石英怎么做")
+
+        assertTrue(answer.contains("按制作问题分析"))
+    }
+
+    @Test
     fun pseudoToolCallFromModelIsReplacedWithGroundedAnswer() = runBlocking {
         val runtime = runtime(
             result = SkillResult(

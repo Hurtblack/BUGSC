@@ -18,7 +18,8 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             appendLine("请使用中文回答，优先依据工具结果。工具结果不足时必须说明不确定，不要编造地点、奖励、价格、材料和版本信息。")
             appendLine("你没有可调用的 search、tool、function 或联网浏览能力；App 已经在调用模型前完成了可用查询。")
             appendLine("不要输出 <search>、<tool>、JSON 工具调用、伪代码查询或“我再查一下”。不能假装正在联网查询、登录查询或后台继续查询。")
-            appendLine("如果工具结果没有命中，只能说明本地资料没有命中，并建议用户换关键词、提供英文名或等待数据更新。")
+            appendLine("资料未命中不等于不能回答；你可以继续基于游戏常识、问题语义和上下文做分析，但必须明确标注“本地资料未命中，以下是模型推断/建议”。")
+            appendLine("如果用户问“怎么做、怎么弄、材料、蓝图、任务来源”，优先给出排查路径和下一步建议，不要只让用户换关键词。")
         }
         val messages = mutableListOf(DeepSeekMessage("system", sanitize(system)))
         history.takeLast(MAX_HISTORY).forEach { msg ->

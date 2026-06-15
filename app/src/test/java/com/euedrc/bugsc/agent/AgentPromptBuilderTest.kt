@@ -53,6 +53,7 @@ class AgentPromptBuilderTest {
 
         assertTrue(text.contains("不要输出 <search>"))
         assertTrue(text.contains("不能假装正在联网查询"))
+        assertTrue(text.contains("资料未命中不等于不能回答"))
     }
 
     @Test

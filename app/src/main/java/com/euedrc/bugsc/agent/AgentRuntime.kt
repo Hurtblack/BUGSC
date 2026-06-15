@@ -16,7 +16,6 @@ class AgentRuntime(
         val query = analyzer.analyze(text)
         val results = skillRegistry.execute(query)
         val fallback = fallbackAnswer(text, results)
-        if (results.isNotEmpty() && results.none { it.hasUsefulData() }) return fallback
         val builder = promptBuilder ?: return fallback
         val client = deepSeekClient ?: return fallback
         val settings = settingsProvider?.invoke() ?: throw DeepSeekClientException("请先配置 DeepSeek")
