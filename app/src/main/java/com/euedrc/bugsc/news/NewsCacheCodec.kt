@@ -20,7 +20,7 @@ object NewsCacheCodec {
                         put("tag", item.tag)
                         put("author", item.author)
                         put("summary", item.summary)
-                        put("thumbnailUrl", item.thumbnailUrl ?: JSONObject.NULL)
+                        put("imageUrls", JSONArray(item.imageUrls))
                         put("link", item.link)
                         put("pubDate", item.pubDate)
                         put("postId", item.postId)
@@ -43,7 +43,7 @@ object NewsCacheCodec {
                             tag = obj.optString("tag"),
                             author = obj.optString("author"),
                             summary = obj.optString("summary"),
-                            thumbnailUrl = obj.optString("thumbnailUrl").takeIf { it.isNotBlank() },
+                            imageUrls = decodeImageUrls(obj),
                             link = obj.optString("link"),
                             pubDate = obj.optString("pubDate"),
                             postId = obj.optString("postId"),
@@ -56,5 +56,21 @@ object NewsCacheCodec {
                 items = items,
             )
         }.getOrNull()
+    }
+
+    private fun decodeImageUrls(obj: JSONObject): List<String> {
+        val imageUrls = obj.optJSONArray("imageUrls")
+        if (imageUrls != null) {
+            return buildList {
+                for (i in 0 until imageUrls.length()) {
+                    imageUrls.optString(i).trim().takeIf(String::isNotBlank)?.let(::add)
+                }
+            }
+        }
+        return listOfNotNull(
+            obj.optString("thumbnailUrl")
+                .trim()
+                .takeIf { it.isNotBlank() && it != "null" }
+        )
     }
 }

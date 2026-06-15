@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scroll_news"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/hud_screen_bg">
@@ -84,6 +85,17 @@
             android:layout_marginTop="10dp"
             android:layout_marginBottom="24dp"
             android:orientation="vertical" />
+
+        <TextView
+            android:id="@+id/tv_news_paging"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:minHeight="40dp"
+            android:paddingVertical="10dp"
+            android:textColor="@color/sc_text_dim"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
     </LinearLayout>
 </ScrollView>

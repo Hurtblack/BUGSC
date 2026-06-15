@@ -17,11 +17,13 @@ class NewsClient(
         val tag: String,
         val author: String,
         val summary: String,
-        val thumbnailUrl: String?,
+        val imageUrls: List<String>,
         val link: String,
         val pubDate: String,
         val postId: String,
-    )
+    ) {
+        val thumbnailUrl: String? get() = imageUrls.firstOrNull()
+    }
 
     data class PageInfo(
         val total: Int,
@@ -61,7 +63,7 @@ class NewsClient(
                     if (title.isBlank() || link.isBlank()) continue
                     val description = obj.optString("description").trim()
                     val detailed = jsonArrayToList(obj.optJSONArray("detailedDescription"))
-                    val summary = obj.optString("description").trim().takeIf { it.isNotBlank() }
+                    val summary = summaryFromHtml(description).takeIf { it.isNotBlank() }
                         ?: summaryFromHtml(detailed.joinToString("\n"))
                     add(
                         NewsItem(
@@ -69,7 +71,7 @@ class NewsClient(
                             tag = obj.optString("tag").trim(),
                             author = obj.optString("author").trim(),
                             summary = summary,
-                            thumbnailUrl = extractThumbnailUrl(description, detailed),
+                            imageUrls = extractImageUrls(description, detailed),
                             link = link,
                             pubDate = obj.optString("pubDate").trim(),
                             postId = obj.optString("postId").trim(),
@@ -102,24 +104,29 @@ class NewsClient(
                 .trim()
         }
 
-        fun extractThumbnailUrl(description: String, detailedDescription: List<String>): String? {
-            return extractFirstImageUrl(description)
-                ?: detailedDescription.firstNotNullOfOrNull { extractFirstImageUrl(it) }
+        fun extractImageUrls(description: String, detailedDescription: List<String>): List<String> {
+            return sequenceOf(description)
+                .plus(detailedDescription.asSequence())
+                .flatMap(::extractImageUrlsFromHtml)
+                .distinct()
+                .take(MAX_ARTICLE_IMAGES)
+                .toList()
         }
 
-        private fun extractFirstImageUrl(html: String): String? {
-            val match = Regex("""<img\b[^>]*src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-                .find(html)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.trim()
-                ?: return null
-            return normalizeImageUrl(match)
+        private fun extractImageUrlsFromHtml(html: String): Sequence<String> {
+            return IMAGE_SRC_REGEX.findAll(html)
+                .mapNotNull { match ->
+                    match.groupValues.getOrNull(1)
+                        ?.trim()
+                        ?.takeIf(String::isNotBlank)
+                        ?.let(::normalizeImageUrl)
+                }
         }
 
         private fun normalizeImageUrl(raw: String): String {
             return when {
-                raw.startsWith("http://") || raw.startsWith("https://") -> raw
+                raw.startsWith("http://") -> "https://${raw.removePrefix("http://")}"
+                raw.startsWith("https://") -> raw
                 raw.startsWith("//") -> "https:$raw"
                 raw.startsWith("/") -> "https://news.citizenwiki.cn$raw"
                 else -> raw
@@ -155,5 +162,9 @@ class NewsClient(
                 conn.disconnect()
             }
         }
+
+        private const val MAX_ARTICLE_IMAGES = 8
+        private val IMAGE_SRC_REGEX =
+            Regex("""<img\b[^>]*src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
     }
 }

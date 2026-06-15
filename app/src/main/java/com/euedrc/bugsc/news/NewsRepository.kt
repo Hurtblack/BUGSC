@@ -13,13 +13,16 @@ class NewsRepository(
         return NewsCacheCodec.decode(raw)
     }
 
-    fun fetchRemoteFirstPage(): List<NewsClient.NewsItem> {
-        return client.fetchNewsPage(pageNumber = 1)
-    }
+    fun fetchPage(pageNumber: Int, searchText: String = ""): List<NewsClient.NewsItem> =
+        client.fetchNewsPage(pageNumber = pageNumber, searchText = searchText)
 
-    fun fetchRemoteFirstPage(searchText: String): List<NewsClient.NewsItem> {
-        return client.fetchNewsPage(pageNumber = 1, searchText = searchText)
-    }
+    fun fetchPageInfo(searchText: String = ""): NewsClient.PageInfo =
+        client.fetchPageInfo(searchText = searchText)
+
+    fun fetchRemoteFirstPage(): List<NewsClient.NewsItem> = fetchPage(pageNumber = 1)
+
+    fun fetchRemoteFirstPage(searchText: String): List<NewsClient.NewsItem> =
+        fetchPage(pageNumber = 1, searchText = searchText)
 
     fun saveFirstPage(items: List<NewsClient.NewsItem>, cachedAt: Long = System.currentTimeMillis()): Unit {
         prefs.edit()

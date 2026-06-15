@@ -8,13 +8,19 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
 object ImageLoader {
+    private const val DISK_CACHE_MAX_SIZE = 50L * 1024 * 1024
+    private const val DISK_CACHE_MAX_AGE = 7L * 24 * 60 * 60 * 1000
+
     private val cache = object : android.util.LruCache<String, Bitmap>(20 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
+    @Volatile
+    private var diskCache: ImageDiskCache? = null
 
     fun load(fragment: Fragment, imageView: ImageView, url: String?, headers: Map<String, String> = emptyMap()) {
         if (url.isNullOrBlank()) return
@@ -23,21 +29,15 @@ object ImageLoader {
             imageView.setImageBitmap(it)
             return
         }
+        val cacheDirectory = fragment.requireContext().cacheDir
         fragment.viewLifecycleOwner.lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
-                runCatching {
-                    val conn = URL(url).openConnection() as HttpURLConnection
-                    conn.connectTimeout = 10_000
-                    conn.readTimeout = 10_000
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                    headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-                    try {
-                        if (conn.responseCode !in 200..299) return@runCatching null
-                        BitmapFactory.decodeStream(conn.inputStream)
-                    } finally {
-                        conn.disconnect()
-                    }
-                }.getOrNull()
+                val persistentCache = getDiskCache(cacheDirectory)
+                persistentCache.read(url)
+                    ?.let(::decodeBitmap)
+                    ?: loadWithOneRetry { download(url, headers) }
+                        ?.also { persistentCache.write(url, it) }
+                        ?.let(::decodeBitmap)
             }
             if (imageView.tag == url && bitmap != null) {
                 cache.put(url, bitmap)
@@ -45,4 +45,32 @@ object ImageLoader {
             }
         }
     }
+
+    private fun getDiskCache(cacheDirectory: File): ImageDiskCache {
+        diskCache?.let { return it }
+        return synchronized(this) {
+            diskCache ?: ImageDiskCache(
+                directory = File(cacheDirectory, "image_cache"),
+                maxSizeBytes = DISK_CACHE_MAX_SIZE,
+                maxAgeMillis = DISK_CACHE_MAX_AGE,
+            ).also { diskCache = it }
+        }
+    }
+
+    private fun download(url: String, headers: Map<String, String>): ByteArray? {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 10_000
+        conn.readTimeout = 10_000
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+        headers.forEach { (key, value) -> conn.setRequestProperty(key, value) }
+        return try {
+            if (conn.responseCode !in 200..299) return null
+            conn.inputStream.use { it.readBytes() }.takeIf(ByteArray::isNotEmpty)
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun decodeBitmap(bytes: ByteArray): Bitmap? =
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
 }
