@@ -12,7 +12,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
 
 class CharacterRepairFragment : Fragment() {
     private lateinit var webView: WebView
@@ -28,6 +30,13 @@ class CharacterRepairFragment : Fragment() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        // 进页门禁：未登录跳 RSI 登录页（把本页弹出栈防死循环），登录后重新进入。
+        if (!RsiCookieStore.loadSession(requireContext()).isLoggedIn) {
+            navigateToLoginGated(R.id.RsiLoginFragment, R.id.CharacterRepairFragment)
+            return
+        }
+
         webView = view.findViewById(R.id.web_repair)
         tvStatus = view.findViewById(R.id.tv_repair_status)
         btnReload = view.findViewById(R.id.btn_repair_reload)
@@ -67,7 +76,7 @@ class CharacterRepairFragment : Fragment() {
     private fun loadRepairPage() {
         val session = RsiCookieStore.injectIntoWebView(requireContext(), webView)
         if (!session.isLoggedIn) {
-            tvStatus.text = "未找到 RSI 登录状态。请先进入“库存查看”登录，再回来使用角色修复。"
+            tvStatus.text = "未找到 RSI 登录状态。请先登录 RSI 账号，再回来使用角色修复。"
         } else {
             tvStatus.text = "已注入 RSI 登录状态，正在打开角色修复页..."
         }
@@ -81,7 +90,8 @@ class CharacterRepairFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        webView.stopLoading()
+        // 未登录时门禁提前 return，webView 未初始化，避免访问未初始化 lateinit。
+        if (::webView.isInitialized) webView.stopLoading()
         super.onDestroyView()
     }
 }

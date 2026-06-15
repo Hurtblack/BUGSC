@@ -55,6 +55,7 @@ class ScmMarketClient {
 
             return MarketOrder(
                 orderNumber = obj.optString("orderNumber"),
+                creatorId = obj.optLong("creatorId"),
                 creatorType = obj.optInt("creatorType"),
                 remainingQuantity = obj.optInt("remainingQuantity"),
                 unitPrice = obj.optDouble("unitPrice", 0.0),

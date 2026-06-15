@@ -59,6 +59,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.euedrc.bugsc.scm.ScmAuthStore.init(applicationContext)
         setContentView(R.layout.activity_main)
 
         val navHost = supportFragmentManager

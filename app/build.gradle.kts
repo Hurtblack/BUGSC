@@ -75,6 +75,9 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.okhttp)
 
     // Compose (C 方案外壳 + 底部栏动效)
     implementation(libs.androidx.activity.compose)

@@ -11,6 +11,7 @@ data class MarketOrderItem(
 
 data class MarketOrder(
     val orderNumber: String,
+    val creatorId: Long,
     val creatorType: Int,
     val remainingQuantity: Int,
     val unitPrice: Double,

@@ -160,6 +160,71 @@
     </fragment>
 
     <fragment
+        android:id="@+id/ChatFragment"
+        android:name="com.euedrc.bugsc.chat.ChatFragment"
+        android:label="聊天"
+        tools:layout="@layout/fragment_chat">
+        <argument
+            android:name="otherUserId"
+            app:argType="long"
+            android:defaultValue="0L" />
+        <argument
+            android:name="otherUserNickname"
+            app:argType="string"
+            android:defaultValue="" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/RsiLoginFragment"
+        android:name="com.euedrc.bugsc.RsiLoginFragment"
+        android:label="RSI 登录"
+        tools:layout="@layout/fragment_rsi_login">
+        <argument
+            android:name="returnDestId"
+            app:argType="integer"
+            android:defaultValue="0" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/ScmLoginFragment"
+        android:name="com.euedrc.bugsc.scm.ScmLoginFragment"
+        android:label="SCM 登录"
+        tools:layout="@layout/fragment_scm_login">
+        <argument
+            android:name="returnDestId"
+            app:argType="integer"
+            android:defaultValue="0" />
+        <action
+            android:id="@+id/action_ScmLogin_to_ScmRegister"
+            app:destination="@id/ScmRegisterFragment" />
+        <action
+            android:id="@+id/action_ScmLogin_to_ScmPassword"
+            app:destination="@id/ScmPasswordFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/ScmRegisterFragment"
+        android:name="com.euedrc.bugsc.scm.ScmRegisterFragment"
+        android:label="SCM 注册"
+        tools:layout="@layout/fragment_scm_register">
+        <argument
+            android:name="returnDestId"
+            app:argType="integer"
+            android:defaultValue="0" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/ScmPasswordFragment"
+        android:name="com.euedrc.bugsc.scm.ScmPasswordFragment"
+        android:label="SCM 密码"
+        tools:layout="@layout/fragment_scm_password">
+        <argument
+            android:name="mode"
+            app:argType="string"
+            android:defaultValue="reset" />
+    </fragment>
+
+    <fragment
         android:id="@+id/LegalFragment"
         android:name="com.euedrc.bugsc.LegalFragment"
         android:label="协议与声明"

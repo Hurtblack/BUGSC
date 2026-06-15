@@ -10,7 +10,9 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.requireScmLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,6 +115,24 @@ class MarketDetailFragment : Fragment() {
         btnGoMarket.setOnClickListener {
             runCatching {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(MARKET_URL)))
+            }
+        }
+
+        val btnContact = view.findViewById<Button>(R.id.btn_contact)
+        val myId = if (com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) com.euedrc.bugsc.scm.ScmAuthStore.session().userId else 0L
+        if (order.creatorId <= 0 || (myId != 0L && order.creatorId == myId)) {
+            btnContact.visibility = View.GONE
+        } else {
+            btnContact.setOnClickListener {
+                requireScmLogin {
+                    findNavController().navigate(
+                        R.id.ChatFragment,
+                        androidx.core.os.bundleOf(
+                            com.euedrc.bugsc.chat.ChatFragment.ARG_OTHER_ID to order.creatorId,
+                            com.euedrc.bugsc.chat.ChatFragment.ARG_OTHER_NICK to order.nickname,
+                        ),
+                    )
+                }
             }
         }
 

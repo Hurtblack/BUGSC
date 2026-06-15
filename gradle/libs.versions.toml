@@ -13,8 +13,14 @@ navigationUiKtx = "2.9.6"
 coroutines = "1.9.0"
 composeBom = "2024.12.01"
 activityCompose = "1.9.3"
+securityCrypto = "1.1.0-alpha06"
+viewpager2 = "1.1.0"
+okhttp = "4.12.0"
 
 [libraries]
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -38,4 +44,3 @@ androidx-material-icons-extended = { group = "androidx.compose.material", name =
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-

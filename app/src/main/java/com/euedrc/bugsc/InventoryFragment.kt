@@ -10,11 +10,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,27 +30,20 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * 库存展示页（已瘦身）：进页门禁跳转 RSI 登录（未登录），登录后只负责展示库存。
+ * 登录 UI 已抽到 [RsiLoginFragment]。
+ */
 class InventoryFragment : Fragment() {
 
     private val prefs by lazy { requireContext().getSharedPreferences("inventory", Context.MODE_PRIVATE) }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var client = RsiInventoryClient()
-    private var pendingSecondStep = false
-    private var pendingCaptcha = false
 
-    private lateinit var etUsername: EditText
-    private lateinit var etPassword: EditText
-    private lateinit var etCaptcha: EditText
-    private lateinit var etCode: EditText
-    private lateinit var tvUsernameLabel: TextView
-    private lateinit var tvPasswordLabel: TextView
-    private lateinit var tvCaptchaLabel: TextView
-    private lateinit var tvCodeLabel: TextView
-    private lateinit var ivCaptcha: ImageView
-    private lateinit var containerAccountProfile: LinearLayout
     private lateinit var ivProfileAvatar: ImageView
     private lateinit var tvProfileName: TextView
     private lateinit var tvProfileHandle: TextView
+    private lateinit var containerAccountProfile: LinearLayout
     private lateinit var tvStatus: TextView
     private lateinit var tvLastSync: TextView
     private lateinit var tvDebug: TextView
@@ -59,8 +53,6 @@ class InventoryFragment : Fragment() {
     private lateinit var containerItems: LinearLayout
     private lateinit var containerPagination: LinearLayout
     private lateinit var tvPageInfo: TextView
-    private lateinit var btnLogin: Button
-    private lateinit var btnLogout: Button
     private lateinit var btnRefresh: Button
     private lateinit var btnPrevPage: Button
     private lateinit var btnNextPage: Button
@@ -75,19 +67,10 @@ class InventoryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        etUsername = view.findViewById(R.id.et_username)
-        etPassword = view.findViewById(R.id.et_password)
-        etCaptcha = view.findViewById(R.id.et_captcha)
-        etCode = view.findViewById(R.id.et_code)
-        tvUsernameLabel = view.findViewById(R.id.tv_username_label)
-        tvPasswordLabel = view.findViewById(R.id.tv_password_label)
-        tvCaptchaLabel = view.findViewById(R.id.tv_captcha_label)
-        tvCodeLabel = view.findViewById(R.id.tv_code_label)
-        ivCaptcha = view.findViewById(R.id.iv_captcha)
-        containerAccountProfile = view.findViewById(R.id.container_account_profile)
         ivProfileAvatar = view.findViewById(R.id.iv_profile_avatar)
         tvProfileName = view.findViewById(R.id.tv_profile_name)
         tvProfileHandle = view.findViewById(R.id.tv_profile_handle)
+        containerAccountProfile = view.findViewById(R.id.container_account_profile)
         tvStatus = view.findViewById(R.id.tv_status)
         tvLastSync = view.findViewById(R.id.tv_last_sync)
         tvDebug = view.findViewById(R.id.tv_debug)
@@ -97,192 +80,29 @@ class InventoryFragment : Fragment() {
         containerItems = view.findViewById(R.id.container_items)
         containerPagination = view.findViewById(R.id.container_pagination)
         tvPageInfo = view.findViewById(R.id.tv_page_info)
-        btnLogin = view.findViewById(R.id.btn_login)
-        btnLogout = view.findViewById(R.id.btn_logout)
         btnRefresh = view.findViewById(R.id.btn_refresh)
         btnPrevPage = view.findViewById(R.id.btn_prev_page)
         btnNextPage = view.findViewById(R.id.btn_next_page)
 
-        etUsername.setText(prefs.getString(KEY_USERNAME, "") ?: "")
+        // 进页门禁：未登录跳 RSI 登录页（把本页弹出栈防死循环），登录后重新进入。
+        if (!RsiCookieStore.loadSession(requireContext()).isLoggedIn) {
+            navigateToLoginGated(R.id.RsiLoginFragment, R.id.InventoryFragment)
+            return
+        }
+
         client = RsiInventoryClient(loadSession())
-        updateLoginStateUi()
+        containerAccountProfile.visibility = View.VISIBLE
         renderProfile(loadCachedProfile())
+        tvStatus.text = "已登录：${profileTitle(loadCachedProfile())}"
+        loadUserProfile(forceRefresh = false)
+        showCachedInventoryOrFetch()
 
-        if (client.currentSession().isLoggedIn) {
-            tvStatus.text = "已登录：${profileTitle(loadCachedProfile())}"
-            loadUserProfile(forceRefresh = false)
-            showCachedInventoryOrFetch()
-        }
-
-        btnLogin.setOnClickListener {
-            when {
-                pendingSecondStep -> submitSecondStepCode()
-                pendingCaptcha -> submitCaptcha()
-                else -> login()
-            }
-        }
-        btnLogout.setOnClickListener { logout() }
         btnRefresh.setOnClickListener { fetchInventory(forceRefresh = true) }
-        ivCaptcha.setOnClickListener { loadCaptchaImage() }
         btnPrevPage.setOnClickListener {
-            if (currentDisplayPage > 0) {
-                currentDisplayPage--
-                renderCurrentPage()
-            }
+            if (currentDisplayPage > 0) { currentDisplayPage--; renderCurrentPage() }
         }
         btnNextPage.setOnClickListener {
-            if (currentDisplayPage < totalDisplayPages() - 1) {
-                currentDisplayPage++
-                renderCurrentPage()
-            }
-        }
-    }
-
-    private fun login() {
-        val username = etUsername.text.toString().trim()
-        val password = etPassword.text.toString()
-        if (username.isEmpty() || password.isEmpty()) {
-            showError("用户名和密码不能为空")
-            return
-        }
-
-        tvStatus.text = "正在登录 RSI..."
-        tvError.visibility = View.GONE
-        btnLogin.isEnabled = false
-
-        scope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    client.login(username, password)
-                }
-                handleLoginResult(result, username)
-            } catch (e: Exception) {
-                tvStatus.text = "登录失败"
-                showError(e.message ?: "登录失败")
-            } finally {
-                btnLogin.isEnabled = true
-            }
-        }
-    }
-
-    private fun submitCaptcha() {
-        val username = etUsername.text.toString().trim()
-        val password = etPassword.text.toString()
-        val captcha = etCaptcha.text.toString().trim()
-        if (captcha.isEmpty()) {
-            showError("请输入图片验证码")
-            return
-        }
-        if (username.isEmpty() || password.isEmpty()) {
-            showError("用户名和密码不能为空")
-            return
-        }
-
-        tvStatus.text = "正在提交图片验证码..."
-        tvError.visibility = View.GONE
-        btnLogin.isEnabled = false
-
-        scope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    client.login(username, password, captcha)
-                }
-                handleLoginResult(result, username)
-            } catch (e: Exception) {
-                tvStatus.text = "图片验证码提交失败"
-                showError(e.message ?: "图片验证码提交失败")
-                loadCaptchaImage()
-            } finally {
-                btnLogin.isEnabled = true
-            }
-        }
-    }
-
-    private fun submitSecondStepCode() {
-        val username = etUsername.text.toString().trim()
-        val code = etCode.text.toString().trim()
-        if (code.isEmpty()) {
-            showError("请输入二步验证码")
-            return
-        }
-
-        tvStatus.text = "正在提交二步验证码..."
-        tvError.visibility = View.GONE
-        btnLogin.isEnabled = false
-
-        scope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) {
-                    client.submitCode(code)
-                }
-                handleLoginResult(result, username)
-            } catch (e: Exception) {
-                tvStatus.text = "验证码提交失败"
-                showError(e.message ?: "验证码提交失败")
-            } finally {
-                btnLogin.isEnabled = true
-            }
-        }
-    }
-
-    private fun handleLoginResult(result: LoginResult, username: String) {
-        if (result.success) {
-            pendingSecondStep = false
-            pendingCaptcha = false
-            setCaptchaInputVisible(false)
-            setCodeInputVisible(false)
-            saveSession(username, result.session)
-            etPassword.setText("")
-            etCaptcha.setText("")
-            etCode.setText("")
-            updateLoginStateUi()
-            tvStatus.text = "已登录：$username"
-            loadUserProfile(forceRefresh = true)
-            showCachedInventoryOrFetch()
-            return
-        }
-
-        if (result.needCode) {
-            pendingSecondStep = true
-            pendingCaptcha = false
-            setCaptchaInputVisible(false)
-            setCodeInputVisible(true)
-            btnLogin.text = "提交验证码"
-            tvStatus.text = result.message
-            tvError.visibility = View.GONE
-            return
-        }
-
-        if (result.needCaptcha) {
-            pendingCaptcha = true
-            pendingSecondStep = false
-            setCodeInputVisible(false)
-            setCaptchaInputVisible(true)
-            tvStatus.text = "请输入 RSI 图片验证码"
-            tvError.visibility = View.GONE
-            loadCaptchaImage()
-            return
-        }
-
-        tvStatus.text = "登录失败"
-        showError(result.message)
-    }
-
-    private fun loadCaptchaImage() {
-        tvStatus.text = "正在加载 RSI 图片验证码..."
-        scope.launch {
-            try {
-                val bytes = withContext(Dispatchers.IO) {
-                    client.fetchCaptchaImage()
-                }
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                    ?: throw Exception("验证码图片解析失败")
-                ivCaptcha.setImageBitmap(bitmap)
-                tvStatus.text = "请输入图片中的验证码"
-            } catch (e: Exception) {
-                tvStatus.text = "验证码加载失败"
-                showError(e.message ?: "验证码加载失败")
-            }
+            if (currentDisplayPage < totalDisplayPages() - 1) { currentDisplayPage++; renderCurrentPage() }
         }
     }
 
@@ -303,10 +123,8 @@ class InventoryFragment : Fragment() {
 
     private fun fetchInventory(forceRefresh: Boolean) {
         if (!client.currentSession().isLoggedIn) {
-            showError("请先登录")
-            return
+            showError("请先登录"); return
         }
-
         if (forceRefresh) {
             loadUserProfile(forceRefresh = true)
         }
@@ -349,16 +167,18 @@ class InventoryFragment : Fragment() {
                 tvLastSync.text = "最近同步：$syncTime"
                 tvLastSync.visibility = View.VISIBLE
                 tvDebug.visibility = View.GONE
-                saveSession(etUsername.text.toString().trim(), client.currentSession())
+                saveSession(cachedUsername(), client.currentSession())
                 saveCachedItems(items, syncTime)
                 renderItems(items)
             } catch (e: InventoryParseException) {
                 requestCountdownJob?.cancel()
+                Log.e(TAG, "inventory parse fail", e)
                 tvStatus.text = "库存拉取失败"
                 showDebugLog()
                 showError(formatFetchError(e))
             } catch (e: Exception) {
                 requestCountdownJob?.cancel()
+                Log.e(TAG, "inventory fetch fail: ${e.message}", e)
                 tvStatus.text = "库存拉取失败"
                 showDebugLog()
                 showError(formatFetchError(e))
@@ -403,32 +223,6 @@ class InventoryFragment : Fragment() {
             }
             else -> error.message ?: "库存拉取失败"
         }
-    }
-
-    private fun logout() {
-        prefs.edit().clear().apply()
-        client = RsiInventoryClient()
-        pendingSecondStep = false
-        pendingCaptcha = false
-        etPassword.setText("")
-        etCaptcha.setText("")
-        etCode.setText("")
-        setCaptchaInputVisible(false)
-        setCodeInputVisible(false)
-        tvStatus.text = "已退出登录"
-        tvError.visibility = View.GONE
-        tvLastSync.visibility = View.GONE
-        tvDebug.visibility = View.GONE
-        requestCountdownJob?.cancel()
-        containerItems.removeAllViews()
-        clearCachedItems()
-        inventoryItems = emptyList()
-        currentDisplayPage = 0
-        updateLoginStateUi()
-        renderProfile(RsiUserProfile())
-        tvItemCount.text = "0 项"
-        tvEmptyInventory.visibility = View.VISIBLE
-        containerPagination.visibility = View.GONE
     }
 
     private fun renderItems(items: List<InventoryItem>) {
@@ -547,21 +341,6 @@ class InventoryFragment : Fragment() {
         }
     }
 
-    private fun setCodeInputVisible(visible: Boolean) {
-        val visibility = if (visible) View.VISIBLE else View.GONE
-        tvCodeLabel.visibility = visibility
-        etCode.visibility = visibility
-        btnLogin.text = if (visible) "提交验证码" else "登录并拉取库存"
-    }
-
-    private fun setCaptchaInputVisible(visible: Boolean) {
-        val visibility = if (visible) View.VISIBLE else View.GONE
-        tvCaptchaLabel.visibility = visibility
-        ivCaptcha.visibility = visibility
-        etCaptcha.visibility = visibility
-        btnLogin.text = if (visible) "提交图片验证码" else "登录并拉取库存"
-    }
-
     private fun showError(message: String) {
         tvError.text = message
         tvError.visibility = View.VISIBLE
@@ -574,24 +353,6 @@ class InventoryFragment : Fragment() {
         } else {
             tvDebug.text = log
             tvDebug.visibility = View.VISIBLE
-        }
-    }
-
-    private fun updateLoginStateUi() {
-        val loggedIn = client.currentSession().isLoggedIn
-        val loginVisibility = if (loggedIn) View.GONE else View.VISIBLE
-        val sessionVisibility = if (loggedIn) View.VISIBLE else View.GONE
-        tvUsernameLabel.visibility = loginVisibility
-        etUsername.visibility = loginVisibility
-        tvPasswordLabel.visibility = loginVisibility
-        etPassword.visibility = loginVisibility
-        btnLogin.visibility = loginVisibility
-        btnLogout.visibility = sessionVisibility
-        btnRefresh.visibility = sessionVisibility
-        containerAccountProfile.visibility = sessionVisibility
-        if (loggedIn) {
-            setCaptchaInputVisible(false)
-            setCodeInputVisible(false)
         }
     }
 
@@ -609,7 +370,7 @@ class InventoryFragment : Fragment() {
                 runCatching { client.fetchUserProfile() }.getOrNull()
             } ?: return@launch
             saveProfile(profile)
-            saveSession(etUsername.text.toString().trim(), client.currentSession())
+            saveSession(cachedUsername(), client.currentSession())
             renderProfile(profile)
             if (tvStatus.text.startsWith("已登录")) {
                 tvStatus.text = "已登录：${profileTitle(profile)}"
@@ -622,7 +383,7 @@ class InventoryFragment : Fragment() {
         tvProfileName.text = title.ifBlank { "已登录" }
         tvProfileHandle.text = when {
             profile.handle.isNotBlank() -> "@${profile.handle}"
-            etUsername.text.isNotBlank() -> etUsername.text.toString()
+            cachedUsername().isNotBlank() -> cachedUsername()
             else -> "RSI SESSION"
         }
         ivProfileAvatar.setImageDrawable(null)
@@ -633,7 +394,7 @@ class InventoryFragment : Fragment() {
     private fun profileTitle(profile: RsiUserProfile): String {
         return profile.displayName
             .ifBlank { profile.handle }
-            .ifBlank { etUsername.text.toString().trim() }
+            .ifBlank { cachedUsername() }
             .ifBlank { "RSI 账号" }
     }
 
@@ -705,6 +466,8 @@ class InventoryFragment : Fragment() {
         )
     }
 
+    private fun cachedUsername(): String = prefs.getString(KEY_USERNAME, "") ?: ""
+
     private fun loadCachedItems(): List<InventoryItem> {
         if (prefs.getInt(KEY_CACHE_VERSION, 0) != CACHE_VERSION) return emptyList()
         return runCatching {
@@ -733,14 +496,6 @@ class InventoryFragment : Fragment() {
             .putInt(KEY_CACHE_VERSION, CACHE_VERSION)
             .putString(KEY_ITEMS_CACHE, InventoryCacheCodec.encodeItems(items))
             .putString(KEY_LAST_SYNC, syncTime)
-            .apply()
-    }
-
-    private fun clearCachedItems() {
-        prefs.edit()
-            .remove(KEY_ITEMS_CACHE)
-            .remove(KEY_LAST_SYNC)
-            .remove(KEY_CACHE_VERSION)
             .apply()
     }
 

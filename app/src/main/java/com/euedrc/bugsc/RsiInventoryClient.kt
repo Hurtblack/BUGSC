@@ -31,7 +31,8 @@ data class LoginResult(
 data class RsiUserProfile(
     val displayName: String = "",
     val handle: String = "",
-    val avatarUrl: String = ""
+    val avatarUrl: String = "",
+    val referralCode: String = ""
 )
 
 data class InventoryRequestState(
@@ -171,7 +172,8 @@ class RsiInventoryClient(
         return RsiUserProfile(
             displayName = displayName,
             handle = handle,
-            avatarUrl = graphAvatar.ifBlank { citizenAvatar }
+            avatarUrl = graphAvatar.ifBlank { citizenAvatar },
+            referralCode = account.optString("referral_code")
         )
     }
 
@@ -221,20 +223,44 @@ class RsiInventoryClient(
     }
 
     private fun getText(endpoint: String): String {
-        val conn = openConnection(endpoint)
-        return try {
-            conn.requestMethod = "GET"
-            readResponse(conn)
-        } finally {
-            conn.disconnect()
+        // 手动跟随重定向：RSI 会把 account/pledges 301 到 /en/account/pledges，
+        // 而 HttpURLConnection 自动跟随会丢掉手动设置的 x-rsi-token/Cookie 等认证头，
+        // 导致跟随后的请求变成未认证、拿到机库公开外壳页（无条目）。这里每跳重新带全部头。
+        var url = "$BASE_URL$endpoint"
+        var hops = 0
+        while (true) {
+            val conn = openUrl(url)
+            try {
+                conn.requestMethod = "GET"
+                val code = conn.responseCode
+                captureSetCookies(conn)
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    if (location.isNullOrBlank() || hops >= MAX_REDIRECTS) {
+                        throw InventoryFetchException(
+                            type = InventoryErrorType.HTTP,
+                            statusCode = code,
+                            message = "重定向异常",
+                        )
+                    }
+                    url = URL(URL(url), location).toString()
+                    hops++
+                    continue
+                }
+                return readBody(conn, code)
+            } finally {
+                conn.disconnect()
+            }
         }
     }
 
-    private fun openConnection(endpoint: String): HttpURLConnection {
-        val conn = URL("$BASE_URL$endpoint").openConnection() as HttpURLConnection
+    private fun openConnection(endpoint: String): HttpURLConnection = openUrl("$BASE_URL$endpoint")
+
+    private fun openUrl(url: String): HttpURLConnection {
+        val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = REQUEST_TIMEOUT_MS.toInt()
         conn.readTimeout = REQUEST_TIMEOUT_MS.toInt()
-        conn.instanceFollowRedirects = true
+        conn.instanceFollowRedirects = false
         conn.setRequestProperty("Accept", "application/json, text/html, */*")
         conn.setRequestProperty("User-Agent", USER_AGENT)
         conn.setRequestProperty("Referer", BASE_URL)
@@ -276,6 +302,10 @@ class RsiInventoryClient(
     private fun readResponse(conn: HttpURLConnection): String {
         val code = conn.responseCode
         captureSetCookies(conn)
+        return readBody(conn, code)
+    }
+
+    private fun readBody(conn: HttpURLConnection, code: Int): String {
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val body = stream?.let { BufferedReader(InputStreamReader(it)).readText() } ?: ""
         debug(
@@ -458,6 +488,7 @@ class RsiInventoryClient(
         private const val TAG = "RsiInventory"
         private const val BASE_URL = "https://robertsspaceindustries.com/"
         private const val PLEDGE_FETCH_RETRY = 3
+        private const val MAX_REDIRECTS = 6
         private const val PLEDGE_RETRY_DELAY_MS = 1500L
         const val REQUEST_TIMEOUT_MS = 20_000L
         private const val USER_AGENT =
@@ -471,6 +502,7 @@ class RsiInventoryClient(
       nickname
       username
       profileUrl
+      referral_code
       __typename
     }
     __typename

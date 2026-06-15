@@ -52,6 +52,7 @@ class ScmMarketClientTest {
         assertEquals(1, page.list.size)
         val order = page.list[0]
         assertEquals("CSDD202606101934511", order.orderNumber)
+        assertEquals(555L, order.creatorId)
         assertTrue(order.isSell)
         assertEquals(7000000.0, order.unitPrice, 0.01)
         assertEquals("测试物品", order.itemName)
