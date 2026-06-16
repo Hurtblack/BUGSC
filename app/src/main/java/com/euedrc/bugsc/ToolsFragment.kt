@@ -22,6 +22,8 @@ import kotlinx.coroutines.withContext
 class ToolsFragment : Fragment() {
 
     private val statusClient = RsiStatusClient()
+    private lateinit var statusCache: RsiStatusCache
+    private var currentHeaderStatus: ToolHeaderStatus? = null
     private var cardBug: LinearLayout? = null
     private var cardAgent: LinearLayout? = null
     private var cardTimer: LinearLayout? = null
@@ -47,6 +49,7 @@ class ToolsFragment : Fragment() {
         tvStatusPlatformDot = view.findViewById(R.id.tv_status_platform_dot)
         tvStatusPuDot = view.findViewById(R.id.tv_status_pu_dot)
         tvStatusAcDot = view.findViewById(R.id.tv_status_ac_dot)
+        statusCache = RsiStatusCache(requireContext())
 
         cardAgent?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "agent_assistant")
@@ -99,12 +102,20 @@ class ToolsFragment : Fragment() {
     }
 
     private fun loadServerStatus() {
-        renderServerStatus(ToolHeaderStatus())
+        val cached = statusCache.load()?.status ?: ToolHeaderStatus()
+        currentHeaderStatus = cached
+        renderServerStatus(cached)
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { statusClient.fetchStatus() }
             }
-            result.onSuccess { renderServerStatus(it) }
+            result.onSuccess { fresh ->
+                if (fresh != currentHeaderStatus) {
+                    currentHeaderStatus = fresh
+                    renderServerStatus(fresh)
+                }
+                statusCache.save(fresh)
+            }
         }
     }
 

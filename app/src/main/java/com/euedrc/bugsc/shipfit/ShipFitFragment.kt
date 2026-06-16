@@ -4,10 +4,12 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -58,25 +60,46 @@ class ShipFitFragment : Fragment() {
     private fun loadData() {
         val repo = ShipFitDataRepository(requireContext())
         ships = repo.loadShips()
-        val names = ships.map { shipDisplayLabel(it) }
-        shipDisplayMap = ships.associateBy { shipDisplayLabel(it) }
+        val names = ships.map { ShipSearchResolver.displayLabel(it) }
+        shipDisplayMap = ships.associateBy { ShipSearchResolver.displayLabel(it) }
         binding.etShipId.setAdapter(
             ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, names)
         )
         binding.etShipId.setOnItemClickListener { parent, _, position, _ ->
             val selected = parent.getItemAtPosition(position)?.toString().orEmpty()
-            val ship = shipDisplayMap[selected] ?: ships.firstOrNull {
-                selected.contains(it.id, ignoreCase = true) || selected.contains(it.name, ignoreCase = true)
-            }
-            if (ship == null) {
-                toast("未找到对应船只：$selected")
-                return@setOnItemClickListener
-            }
-            currentShip = ship
-            renderShipCard(ship)
-            binding.btnLoadout.visibility = View.VISIBLE
-            binding.btnOfficialUrl.visibility = if (ship.officialUrl != null) View.VISIBLE else View.GONE
+            selectShipFromInput(selected, showMissingToast = true)
         }
+        binding.etShipId.setOnEditorActionListener { _, actionId, event ->
+            val isSearchAction = actionId == EditorInfo.IME_ACTION_SEARCH || actionId == EditorInfo.IME_ACTION_DONE
+            val isEnterUp = event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_UP
+            if (isSearchAction || isEnterUp) {
+                selectShipFromInput(binding.etShipId.text?.toString().orEmpty(), showMissingToast = true)
+                true
+            } else {
+                false
+            }
+        }
+        binding.etShipId.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                selectShipFromInput(binding.etShipId.text?.toString().orEmpty(), showMissingToast = false)
+            }
+        }
+    }
+
+    private fun selectShipFromInput(input: String, showMissingToast: Boolean) {
+        val selected = input.trim()
+        if (selected.isBlank()) return
+        val ship = shipDisplayMap[selected] ?: ShipSearchResolver.resolve(selected, ships)
+        if (ship == null) {
+            if (showMissingToast) toast("未找到对应船只：$selected")
+            return
+        }
+        currentShip = ship
+        binding.etShipId.setText(ShipSearchResolver.displayLabel(ship), false)
+        binding.etShipId.dismissDropDown()
+        renderShipCard(ship)
+        binding.btnLoadout.visibility = View.VISIBLE
+        binding.btnOfficialUrl.visibility = if (ship.officialUrl != null) View.VISIBLE else View.GONE
     }
 
     private fun renderShipCard(ship: ShipCard) {
@@ -137,11 +160,6 @@ class ShipFitFragment : Fragment() {
                 binding.ivShip.visibility = View.GONE
             }
         }
-    }
-
-    private fun shipDisplayLabel(ship: ShipCard): String {
-        val zh = ship.zhName
-        return if (!zh.isNullOrBlank()) "$zh (${ship.name}) (${ship.id})" else "${ship.name} (${ship.id})"
     }
 
     private fun summarizeShipTypes(slots: List<ShipSlot>): Map<String, Int> {

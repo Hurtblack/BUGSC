@@ -26,7 +26,9 @@
             android:background="@drawable/input_bg"
             android:completionThreshold="1"
             android:hint="搜索船，例如：MOLE / Polaris / Zeus"
+            android:imeOptions="actionSearch"
             android:padding="12dp"
+            android:singleLine="true"
             android:textColor="@color/sc_text"
             android:textColorHint="@color/sc_text_dim" />
 
