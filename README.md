@@ -4,6 +4,8 @@
 
 QQ群：330941212
 
+当前测试版本：**1.1.0**（versionCode 6）
+
 ---
 
 ## 截图
@@ -36,11 +38,12 @@ QQ群：330941212
 | **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
 | **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exec.xyxyll.com），支持按下次开门时间提前 N 分钟一键添加系统闹钟 |
 | **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价 / 购买链接 |
+| **工具** | MobiGuide(AI助手) | BETA | Tool Calling Agent Loop，按问题自主调用本地资料、SCM 市场/物品/蓝图、行政机库、每日 WB、互联网搜索等工具 |
 | **资讯** | 资讯 | ONLINE | citizenwiki 新闻接口直连，资讯列表 + 关键词搜索，点击跳转原文 |
 | **查询** | SCM 市场 | MARKET | flowcld SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
 | **查询** | 任务搜索 | 4.8.1 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
-| **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算 |
+| **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算；支持中文名/英文名/ship id 直接搜索 |
 | **查询** | 维克洛兑换 | 4.8.0 | 巴努交易清单、兑换材料反查、声望需求 |
 | **查询** | 矿物查询 | 4.7.0 | 矿石分布、出现概率、稀有度、含量范围 |
 | **个人信息** | 库存查看 | ONLINE | RSI 账号登录后拉取飞船/装备库存 |
@@ -70,6 +73,14 @@ app/src/main/
 │   │   ├── Bug.kt               # BUG 数据模型
 │   │   ├── BugData.kt           # 本地 BUG 条目（硬编码）
 │   │   └── BugRepository.kt     # BUG 列表加载与筛选
+│   ├── agent/
+│   │   ├── AgentRuntime.kt      # MobiGuide Agent Loop
+│   │   ├── AgentHermesModels.kt # AgentTool / ToolRegistry / ToolExecutor 模型
+│   │   ├── AgentPromptBuilder.kt # DeepSeek 严格 JSON 工具调用 Prompt
+│   │   ├── AgentToolCallParser.kt # tool_call / final_answer JSON 解析
+│   │   ├── LocalAgentDataProvider.kt # 本地飞船/矿物/蓝图/任务/维克洛资料
+│   │   ├── ScmAgentTools.kt     # SCM 远程物品/市场/蓝图工具
+│   │   └── AppUtilityTools.kt   # 行政机库、每日 WB、应用能力、互联网搜索等工具
 │   ├── blueprint/
 │   │   ├── ScCraftBlueprint.kt  # 蓝图数据模型
 │   │   ├── BlueprintCalculator.kt # 品质/材料计算
@@ -105,6 +116,44 @@ app/src/main/
     ├── wb/                      # 每日 WB 兜底快照
     └── shipfit/                 # 飞船配装静态数据
 ```
+
+---
+
+## MobiGuide(AI助手)
+
+MobiGuide 是应用内的星际公民资料与 SCM 交易助手。当前版本已从“规则式 Planner + DeepSeek 总结”改为标准 **Tool Calling Agent Loop**：
+
+1. App 将可用工具名称、描述、参数 JSON Schema 写入 Prompt。
+2. DeepSeek 每轮只能输出一个严格 JSON 对象：
+   - `{"type":"tool_call","tool":"工具名","arguments":{...}}`
+   - `{"type":"final_answer","answer":"中文回答"}`
+3. App 解析 `tool_call`，通过 `AgentToolRegistry` 找到对应工具并执行。
+4. 工具结果以 `tool_result` 加回上下文，再进入下一轮模型推理。
+5. 直到模型输出 `final_answer`，或达到最大步数。
+
+### 已接入工具
+
+| 工具 | 能力 |
+|---|---|
+| `search_ship` | 本地飞船资料查询，支持中文名、英文名、ship id |
+| `search_mining` | 本地矿物资料查询 |
+| `search_blueprint` | 本地蓝图资料查询 |
+| `search_mission` | 本地任务资料查询 |
+| `search_wikelo` | 本地维克洛兑换资料查询 |
+| `search_market` | SCM 市场出售/求购挂单查询 |
+| `search_scm_item` | SCM 物品搜索 |
+| `search_scm_blueprint` | SCM 蓝图搜索 |
+| `draft_scm_order` | 创建 SCM 订单草稿 |
+| `search_hangar_status` | 行政机库状态查询（查询前同步） |
+| `search_daily_wb` | 每日 WB 查询（查询前同步） |
+| `search_web` | 星民相关互联网信息搜索补充 |
+| `list_app_capabilities` | 查询应用当前可用功能 |
+
+### 安全限制
+
+- 模型不能直接提交订单，只能创建订单草稿；真正提交必须用户点击确认。
+- 模型不能伪造工具结果；资料不足时应说明限制，必要时建议用户同意联网搜索。
+- 模型输出不是合法 JSON、工具不存在或参数校验失败时，会进入 fallback 流程。
 
 ---
 
@@ -226,6 +275,9 @@ python3 tools/export_location_translations.py
 ```bash
 ./gradlew assembleDebug
 # 输出：app/build/outputs/apk/debug/SCMobiGlas-debug-v{versionName}.apk
+
+./gradlew assembleRelease
+# 输出：app/build/outputs/apk/release/SCMobiGlas-release-v{versionName}.apk
 ```
 
 ## 发布规则
