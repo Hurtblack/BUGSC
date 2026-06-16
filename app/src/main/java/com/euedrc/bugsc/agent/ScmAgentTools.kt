@@ -13,6 +13,8 @@ interface ScmAgentGateway {
     fun request(path: String): JSONObject
     fun searchItems(keyword: String): List<ItemSearchResult>
     fun searchOrders(keyword: String): List<MarketOrder>
+    fun searchOrders(keyword: String, creatorType: Int?): List<MarketOrder> =
+        creatorType?.let { type -> searchOrders(keyword).filter { it.creatorType == type } } ?: searchOrders(keyword)
 }
 
 class DefaultScmAgentGateway(
@@ -28,6 +30,13 @@ class DefaultScmAgentGateway(
     override fun searchOrders(keyword: String): List<MarketOrder> =
         marketClient.fetchPage(creatorType = 1, pageNo = 1, pageSize = 5, keyword = keyword).list +
             marketClient.fetchPage(creatorType = 0, pageNo = 1, pageSize = 5, keyword = keyword).list
+
+    override fun searchOrders(keyword: String, creatorType: Int?): List<MarketOrder> =
+        if (creatorType == null) {
+            searchOrders(keyword)
+        } else {
+            marketClient.fetchPage(creatorType = creatorType, pageNo = 1, pageSize = 5, keyword = keyword).list
+        }
 }
 
 object ScmAgentTools {
@@ -121,33 +130,68 @@ class ScmMarketOrderSearchTool(
 ) : AgentTool {
     override val name: String = "search_market"
     override val description: String = "SCM 市场订单查询"
+    override val parameters: List<AgentToolParameter> = listOf(
+        AgentToolParameter("query", "可选：要查询的物品名或关键词；为空时返回当前市场订单列表", required = false),
+        AgentToolParameter("side", "可选：sell 查询出售挂单；buy 查询求购挂单；不确定时留空", required = false),
+    )
 
     override suspend fun run(call: AgentToolCall): AgentToolResult {
-        val term = call.args["term"].orEmpty().trim()
-        if (term.isBlank()) return noResult(call, "SCM 市场未命中")
-        val orders = ScmSearchTermExpander.expand(term, entityIndex)
-            .asSequence()
-            .map { candidate ->
-                gateway.searchOrders(candidate)
-                    .filter { it.remainingQuantity > 0 }
-                    .sortedBy { it.unitPrice }
-                    .take(5)
+        val term = call.args["query"].orEmpty().ifBlank { call.args["term"].orEmpty() }.trim()
+        val creatorType = when (call.args["side"].orEmpty().trim().lowercase()) {
+            "sell", "出售", "selling" -> 1
+            "buy", "求购", "buying" -> 0
+            else -> null
+        }
+        val orders = if (term.isBlank()) {
+            gateway.searchOrders("", creatorType)
+                .filter { it.remainingQuantity > 0 }
+                .sortedWith(compareBy<MarketOrder> { it.creatorType }.thenBy { it.unitPrice })
+                .take(5)
+        } else {
+            ScmSearchTermExpander.expand(term, entityIndex)
+                .asSequence()
+                .map { candidate ->
+                    gateway.searchOrders(candidate, creatorType)
+                        .filter { it.remainingQuantity > 0 }
+                        .sortedBy { it.unitPrice }
+                        .take(5)
+                }
+                .firstOrNull { it.isNotEmpty() }
+                .orEmpty()
+        }
+        if (orders.isEmpty()) {
+            val target = term.ifBlank {
+                when (creatorType) {
+                    1 -> "当前出售挂单"
+                    0 -> "当前求购挂单"
+                    else -> "当前市场订单"
+                }
             }
-            .firstOrNull { it.isNotEmpty() }
-            .orEmpty()
-        if (orders.isEmpty()) return noResult(call, "SCM 市场未命中")
+            return noResult(call, "没有查到“$target”的 SCM 市场挂单。")
+        }
         return AgentToolResult(
             call = call,
             summary = orders.take(3).joinToString("\n") {
-                "${it.itemName}，${if (it.creatorType == 1) "出售" else "求购"} ${formatPrice(it.unitPrice)} aUEC ×${it.remainingQuantity}"
+                buildString {
+                    append(it.itemName)
+                    append("，")
+                    append(if (it.creatorType == 1) "出售" else "求购")
+                    append(" ")
+                    append(formatPrice(it.unitPrice))
+                    append(" aUEC ×")
+                    append(it.remainingQuantity)
+                    it.nickname.takeIf(String::isNotBlank)?.let { seller -> append("，卖家 ").append(seller) }
+                    it.locationName.takeIf(String::isNotBlank)?.let { location -> append("，地点 ").append(location) }
+                }
             },
             facts = orders.take(3).flatMap {
-                listOf(
+                listOfNotNull(
                     AgentFact("订单", it.orderNumber),
                     AgentFact("物品", it.itemName),
                     AgentFact("单价", "${formatPrice(it.unitPrice)} aUEC"),
                     AgentFact("数量", it.remainingQuantity.toString()),
-                    AgentFact("地点", it.locationName),
+                    it.nickname.takeIf(String::isNotBlank)?.let { seller -> AgentFact("卖家", seller) },
+                    it.locationName.takeIf(String::isNotBlank)?.let { location -> AgentFact("地点", location) },
                 )
             },
             sources = listOf(AgentSource("SCM 市场 API", "remote")),

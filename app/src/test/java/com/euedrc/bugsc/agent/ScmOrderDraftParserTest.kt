@@ -36,6 +36,18 @@ class ScmOrderDraftParserTest {
     }
 
     @Test
+    fun extractsQualityWithoutKeepingItInItemKeyword() {
+        val draft = ScmOrderDraftParser.parse("我有一个绝杀品质850想卖500000000uec 地点六角湾")
+
+        assertTrue(draft.isOrderIntent)
+        assertEquals(PublishCreatorType.SELL, draft.creatorType)
+        assertEquals("绝杀", draft.itemKeyword)
+        assertEquals(850, draft.quality)
+        assertEquals(BigDecimal("500000000"), draft.unitPrice)
+        assertEquals("六角湾", draft.locationKeyword)
+    }
+
+    @Test
     fun parsesBuyOrderDraftWithDefaults() {
         val draft = ScmOrderDraftParser.parse("求购 石英 3 个 单价 1000 地点 洛维尔")
 

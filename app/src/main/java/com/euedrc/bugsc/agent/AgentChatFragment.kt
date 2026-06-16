@@ -13,6 +13,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.graphics.toColorInt
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
@@ -23,9 +26,12 @@ import com.euedrc.bugsc.market.publish.PublishItemValue
 import com.euedrc.bugsc.market.transaction.TransactionClient
 import com.euedrc.bugsc.scm.ScmAuthStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.math.max
 
 class AgentChatFragment : Fragment() {
 
@@ -34,6 +40,7 @@ class AgentChatFragment : Fragment() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var send: Button
+    private lateinit var runStatus: TextView
     private lateinit var settingsStore: AgentSettingsStore
     private lateinit var historyStore: AgentHistoryStore
     private val localProvider: LocalAgentDataProvider by lazy { LocalAgentDataProvider(requireContext()) }
@@ -42,6 +49,9 @@ class AgentChatFragment : Fragment() {
     private var conversationVersion: Long = 0L
     private var pendingOrderDraft: ScmOrderDraftResolution.Resolved? = null
     private var pendingOrderParse: ScmOrderDraftParseResult? = null
+    private var runTimer: Job? = null
+    private var runStartedAt: Long = 0L
+    private var runStatusLabel: String = "思考中"
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_agent_chat, parent, false)
@@ -54,6 +64,7 @@ class AgentChatFragment : Fragment() {
         scroll = view.findViewById(R.id.scroll_agent_messages)
         input = view.findViewById(R.id.et_agent_input)
         send = view.findViewById(R.id.btn_agent_send)
+        runStatus = view.findViewById(R.id.tv_agent_run_status)
         view.findViewById<TextView>(R.id.tv_agent_title).text = profile.displayName
         view.findViewById<TextView>(R.id.tv_agent_status).text = getString(R.string.agent_status_deepseek)
         view.findViewById<TextView>(R.id.tv_agent_tagline).text = profile.tagline
@@ -64,6 +75,13 @@ class AgentChatFragment : Fragment() {
             findNavController().navigate(R.id.AgentSettingsFragment)
         }
         send.setOnClickListener { sendMessage() }
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            v.updatePadding(bottom = maxOf(ime.bottom, nav.bottom))
+            if (ime.bottom > nav.bottom) scrollToBottom()
+            insets
+        }
         renderHistory()
         renderConfigState()
     }
@@ -92,16 +110,6 @@ class AgentChatFragment : Fragment() {
     private fun sendMessage() {
         val text = input.text.toString().trim()
         if (text.isBlank()) return
-        val pendingParse = pendingOrderParse
-        val orderDraft = if (pendingParse != null) {
-            ScmOrderDraftParser.mergeFollowUp(pendingParse, text)
-        } else {
-            ScmOrderDraftParser.parse(text)
-        }
-        if (orderDraft.isOrderIntent) {
-            sendOrderDraftMessage(text, orderDraft)
-            return
-        }
         val settings = settingsStore.settings()
         if (!settings.isConfigured) {
             Toast.makeText(requireContext(), R.string.agent_input_config_hint, Toast.LENGTH_SHORT).show()
@@ -114,15 +122,27 @@ class AgentChatFragment : Fragment() {
         historyStore.append(userMsg)
         addBubble(text, mine = true)
         input.setText("")
+        startRunStatus()
         lifecycleScope.launch {
+            val draftState = ScmOrderDraftToolState(pendingParse = pendingOrderParse)
             val answer = withContext(Dispatchers.IO) {
-                runCatching { buildRuntime().answer(text, historyBeforeSend) }
+                runCatching {
+                    buildRuntime(
+                        draftState = draftState,
+                    ).answer(text, historyBeforeSend)
+                }
                     .getOrElse { it.message ?: getString(R.string.agent_request_failed) }
             }
             if (!isAdded || requestVersion != conversationVersion) return@launch
             val msg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.ASSISTANT, answer, System.currentTimeMillis(), AgentMessageStatus.SENT)
             historyStore.append(msg)
             addBubble(answer, mine = false)
+            pendingOrderParse = draftState.pendingParse
+            draftState.resolved?.let { resolution ->
+                pendingOrderDraft = resolution
+                addOrderActions(resolution)
+            }
+            finishRunStatus()
             scrollToBottom()
         }
     }
@@ -180,17 +200,92 @@ class AgentChatFragment : Fragment() {
         Toast.makeText(requireContext(), R.string.agent_new_chat_started, Toast.LENGTH_SHORT).show()
     }
 
-    private fun buildRuntime(): AgentRuntime {
+    private fun buildRuntime(
+        draftState: ScmOrderDraftToolState = ScmOrderDraftToolState(),
+    ): AgentRuntime {
         val index = localProvider.entityIndex()
+        val tools = AgentLocalSearchTools.create(localProvider, index) +
+            ScmAgentTools.create(entityIndex = index) +
+            AppUtilityTools.create(requireContext()) +
+            ScmOrderDraftTool(
+                state = draftState,
+                isLoggedIn = { ScmAuthStore.isLoggedIn },
+                itemSearch = { keyword ->
+                    ScmSearchTermExpander.expand(keyword, index)
+                        .asSequence()
+                        .map { marketPublishClient.searchItems(it) }
+                        .firstOrNull { it.isNotEmpty() }
+                        .orEmpty()
+                },
+                addressList = { transactionClient.addressList() },
+                entityIndex = index,
+            )
         return AgentRuntime(
             analyzer = QueryAnalyzer(index),
             promptBuilder = AgentPromptBuilder(profile),
             deepSeekClient = DeepSeekClient(UrlConnectionDeepSeekTransport()),
             settingsProvider = { settingsStore.settings() },
-            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(AgentLocalSearchTools.create(localProvider, index) + ScmAgentTools.create(entityIndex = index)),
+            toolRegistry = AgentToolRegistry(tools),
+            toolCallingEnabled = true,
+            observer = ::onRuntimeEvent,
         )
     }
+
+    private fun onRuntimeEvent(event: AgentRuntimeEvent) {
+        if (!isAdded) return
+        requireActivity().runOnUiThread {
+            when (event) {
+                is AgentRuntimeEvent.Thinking -> updateRunStatus("思考中")
+                is AgentRuntimeEvent.ToolCallStarted -> updateRunStatus("工具：${event.tool}")
+                is AgentRuntimeEvent.ToolCallFinished -> updateRunStatus("工具完成：${event.tool}")
+                is AgentRuntimeEvent.ModelJson -> Unit
+                is AgentRuntimeEvent.FinalAnswerReady -> Unit
+            }
+        }
+    }
+
+    private fun startRunStatus() {
+        runTimer?.cancel()
+        runStartedAt = System.currentTimeMillis()
+        runStatusLabel = "思考中"
+        runStatus.visibility = View.VISIBLE
+        renderRunStatus()
+        runTimer = lifecycleScope.launch {
+            while (true) {
+                delay(1000)
+                renderRunStatus()
+            }
+        }
+    }
+
+    private fun updateRunStatus(label: String) {
+        runStatusLabel = label
+        if (::runStatus.isInitialized) {
+            runStatus.visibility = View.VISIBLE
+            renderRunStatus()
+        }
+    }
+
+    private fun renderRunStatus() {
+        val seconds = elapsedRunSeconds(minimum = 0L)
+        runStatus.text = "$runStatusLabel · ${seconds}s"
+    }
+
+    private fun finishRunStatus() {
+        runTimer?.cancel()
+        runTimer = null
+        val seconds = elapsedRunSeconds(minimum = 1L)
+        runStatus.text = "回答用时 ${seconds}s"
+        runStatus.visibility = View.VISIBLE
+        runStatus.postDelayed({
+            if (::runStatus.isInitialized && runTimer == null) {
+                runStatus.visibility = View.GONE
+            }
+        }, 1600L)
+    }
+
+    private fun elapsedRunSeconds(minimum: Long): Long =
+        max(minimum, (System.currentTimeMillis() - runStartedAt) / 1000L)
 
     private fun addBubble(text: String, mine: Boolean) {
         val bubble = TextView(requireContext()).apply {
@@ -267,7 +362,7 @@ class AgentChatFragment : Fragment() {
                         item = draft.item,
                         quantity = draft.parsed.quantity,
                         price = requireNotNull(draft.parsed.unitPrice),
-                        quality = null,
+                        quality = draft.parsed.quality,
                     )
                     marketPublishClient.createOrder(
                         creatorType = requireNotNull(draft.parsed.creatorType),

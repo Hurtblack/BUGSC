@@ -211,7 +211,7 @@
     <fragment
         android:id="@+id/AgentChatFragment"
         android:name="com.euedrc.bugsc.agent.AgentChatFragment"
-        android:label="SCMBOT"
+        android:label="MobiGuide (AI助手)"
         tools:layout="@layout/fragment_agent_chat" />
 
     <fragment

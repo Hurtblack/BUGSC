@@ -52,6 +52,7 @@ class ScmAgentToolsTest {
 
     private class KeywordSensitiveGateway : ScmAgentGateway {
         val searchedItems = mutableListOf<String>()
+        val searchedOrders = mutableListOf<Pair<String, Int?>>()
 
         override fun request(path: String): JSONObject = JSONObject("""{"code":0,"data":{"list":[]}}""")
 
@@ -72,7 +73,19 @@ class ScmAgentToolsTest {
             }
         }
 
-        override fun searchOrders(keyword: String): List<MarketOrder> = emptyList()
+        override fun searchOrders(keyword: String): List<MarketOrder> {
+            searchedOrders += keyword to null
+            return emptyList()
+        }
+
+        override fun searchOrders(keyword: String, creatorType: Int?): List<MarketOrder> {
+            searchedOrders += keyword to creatorType
+            return if (keyword.isBlank() && creatorType == 1) {
+                listOf(marketOrder(itemName = "科力晶", creatorType = 1, unitPrice = 1200.0))
+            } else {
+                emptyList()
+            }
+        }
     }
 
     @Test
@@ -145,4 +158,84 @@ class ScmAgentToolsTest {
         assertTrue(gateway.searchedItems.contains("Killshot Rifle"))
         assertTrue(result.summary.contains("Killshot Rifle"))
     }
+
+    @Test
+    fun marketToolUsesSellSideWhenUserWantsToBuyCurrentPrice() = runBlocking {
+        val gateway = KeywordSensitiveGateway()
+        val tool = ScmMarketOrderSearchTool(gateway)
+
+        tool.run(AgentToolCall("search_market", mapOf("query" to "科粒晶", "side" to "sell")))
+
+        assertTrue(gateway.searchedOrders.contains("科粒晶" to 1))
+    }
+
+    @Test
+    fun marketToolNoResultMessageIncludesOriginalQuery() = runBlocking {
+        val gateway = object : ScmAgentGateway {
+            override fun request(path: String): JSONObject = JSONObject("""{"code":0,"data":{"list":[]}}""")
+            override fun searchItems(keyword: String): List<ItemSearchResult> = emptyList()
+            override fun searchOrders(keyword: String): List<MarketOrder> = emptyList()
+            override fun searchOrders(keyword: String, creatorType: Int?): List<MarketOrder> = emptyList()
+        }
+        val tool = ScmMarketOrderSearchTool(gateway)
+
+        val result = tool.run(AgentToolCall("search_market", mapOf("query" to "科粒晶", "side" to "sell")))
+
+        assertTrue(result.summary.contains("科粒晶"))
+        assertTrue(result.summary.contains("没有查到"))
+    }
+
+    @Test
+    fun marketToolCanListCurrentSellOrdersWhenQueryIsBlank() = runBlocking {
+        val gateway = KeywordSensitiveGateway()
+        val tool = ScmMarketOrderSearchTool(gateway)
+
+        val result = tool.run(AgentToolCall("search_market", mapOf("query" to "", "side" to "sell")))
+
+        assertTrue(gateway.searchedOrders.contains("" to 1))
+        assertTrue(result.summary.contains("科力晶"))
+        assertTrue(result.summary.contains("出售"))
+        assertTrue(result.summary.contains("1200"))
+    }
+
+    @Test
+    fun marketToolIncludesSellerInSummaryAndFacts() = runBlocking {
+        val gateway = KeywordSensitiveGateway()
+        val tool = ScmMarketOrderSearchTool(gateway)
+
+        val result = tool.run(AgentToolCall("search_market", mapOf("query" to "", "side" to "sell")))
+
+        assertTrue(result.summary.contains("卖家 seller"))
+        assertTrue(result.facts.any { it.label == "卖家" && it.value == "seller" })
+    }
+
+    private companion object {
+        fun marketOrder(
+            itemName: String,
+            creatorType: Int,
+            unitPrice: Double,
+        ): MarketOrder = MarketOrder(
+            orderNumber = "ORD-1",
+            creatorId = 1L,
+            creatorType = creatorType,
+            remainingQuantity = 10,
+            unitPrice = unitPrice,
+            status = 1,
+            remark = "",
+            expireTime = 0L,
+            createTime = 0L,
+            nickname = "seller",
+            avatar = "",
+            point = 0,
+            creatorStatus = 1,
+            itemName = itemName,
+            locationName = "奥里森",
+            locationUrl = "",
+            tradeTime = "",
+            tradeStartTime = "",
+            tradeEndTime = "",
+            itemDetails = emptyList(),
+        )
+    }
+
 }

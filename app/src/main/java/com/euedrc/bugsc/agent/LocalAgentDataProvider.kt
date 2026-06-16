@@ -104,9 +104,13 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
     }
 
     private fun searchShips(query: AgentQuery): List<AgentSearchHit> =
-        ships.asSequence()
+        query.entities
+            .filter { it.type == "ship" }
+            .mapNotNull { entity -> ships.firstOrNull { ship -> ship.id == entity.value } }
+            .ifEmpty { ships }
+            .asSequence()
             .map { it to matchScore(query, it.name, it.zhName, it.id) }
-            .filter { it.second > 0 }
+            .filter { it.second > 0 || query.entities.any { entity -> entity.type == "ship" && entity.value == it.first.id } }
             .sortedByDescending { it.second }
             .take(3)
             .map { (ship, score) ->

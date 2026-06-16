@@ -61,4 +61,21 @@ class AgentLocalDataProviderInstrumentedTest {
         assertTrue(hits.count { it.summary.contains("绝杀") } >= 3)
         assertTrue(hits.any { it.summary.contains("铁") || it.facts.any { fact -> fact.value.contains("铁") } })
     }
+
+    @Test
+    fun chineseConstellationAliasFindsPerseusShip() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val provider = LocalAgentDataProvider(context)
+        val query = QueryAnalyzer(provider.entityIndex()).analyze("帮我搜一下英仙座")
+
+        assertTrue(query.entities.any { it.type == "ship" && it.value == "rsi_perseus" })
+
+        val hits = provider.search(
+            query.copy(
+                intents = listOf(ScoredIntent(AgentIntent.SHIP_INFO, 10)),
+            ),
+        )
+
+        assertTrue(hits.any { it.summary.contains("Perseus") && it.summary.contains("英仙座") })
+    }
 }

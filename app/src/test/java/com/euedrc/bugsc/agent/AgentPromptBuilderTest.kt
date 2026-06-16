@@ -73,6 +73,99 @@ class AgentPromptBuilderTest {
     }
 
     @Test
+    fun toolCallingPromptStopsMarketSearchWhenMarketToolMisses() {
+        val messages = builder.buildToolCalling(
+            userText = "帮我查一下科粒晶有没有人卖",
+            history = emptyList(),
+            tools = listOf(
+                AgentToolDefinition(
+                    name = "search_market",
+                    description = "SCM 市场订单查询",
+                    parameters = listOf(AgentToolParameter("query", "关键词")),
+                ),
+            ),
+            loopMessages = emptyList(),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("search_market"))
+        assertTrue(text.contains("市场"))
+        assertTrue(text.contains("final_answer"))
+        assertTrue(text.contains("不要继续调用 search_scm_item、search_local_index、search_mining"))
+    }
+
+    @Test
+    fun toolCallingPromptDescribesBroadMarketListingIntent() {
+        val messages = builder.buildToolCalling(
+            userText = "市场最近有什么货",
+            history = emptyList(),
+            tools = listOf(
+                AgentToolDefinition(
+                    name = "search_market",
+                    description = "SCM 市场订单查询",
+                    parameters = listOf(
+                        AgentToolParameter("query", "可选关键词", required = false),
+                        AgentToolParameter("side", "方向", required = false),
+                    ),
+                ),
+            ),
+            loopMessages = emptyList(),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("市场列表意图"))
+        assertTrue(text.contains("没有指定具体物品"))
+        assertTrue(text.contains("query=\"\""))
+        assertTrue(text.contains("side=\"sell\""))
+        assertTrue(text.contains("side=\"buy\""))
+    }
+
+    @Test
+    fun toolCallingPromptDescribesMarketFollowUpIntent() {
+        val messages = builder.buildToolCalling(
+            userText = "谁卖啊",
+            history = emptyList(),
+            tools = listOf(
+                AgentToolDefinition(
+                    name = "search_market",
+                    description = "SCM 市场订单查询",
+                    parameters = listOf(AgentToolParameter("query", "关键词", required = false)),
+                ),
+            ),
+            loopMessages = emptyList(),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("市场追问意图"))
+        assertTrue(text.contains("谁卖"))
+        assertTrue(text.contains("卖家"))
+        assertTrue(text.contains("search_market"))
+    }
+
+    @Test
+    fun toolCallingPromptPreventsRepeatedToolCallAfterUsefulResult() {
+        val messages = builder.buildToolCalling(
+            userText = "Perseus wiki",
+            history = emptyList(),
+            tools = listOf(
+                AgentToolDefinition(
+                    name = "search_ship",
+                    description = "飞船资料查询",
+                    parameters = listOf(AgentToolParameter("query", "关键词")),
+                ),
+            ),
+            loopMessages = listOf(
+                DeepSeekMessage("assistant", """{"type":"tool_call","tool":"search_ship","arguments":{"query":"Perseus"}}"""),
+                DeepSeekMessage("system", """{"type":"tool_result","tool":"search_ship","summary":"英仙座 / Perseus"}"""),
+            ),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("收到有效 tool_result 后"))
+        assertTrue(text.contains("不要重复调用同一个工具和同一组参数"))
+    }
+
+    @Test
     fun promptFiltersSensitiveFields() {
         val messages = builder.build(
             userText = "token=secret Cookie=session DeepSeek API Key sk-test",

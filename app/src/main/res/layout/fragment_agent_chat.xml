@@ -101,6 +101,20 @@
             android:padding="12dp" />
     </ScrollView>
 
+    <TextView
+        android:id="@+id/tv_agent_run_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/sc_panel"
+        android:fontFamily="monospace"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="6dp"
+        android:textColor="@color/sc_accent"
+        android:textSize="11sp"
+        android:visibility="gone"
+        tools:text="思考中 · 1s"
+        tools:visibility="visible" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

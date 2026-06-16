@@ -1,12 +1,13 @@
 package com.euedrc.bugsc.agent
 
+import org.json.JSONArray
+
 class AgentPromptBuilder(private val profile: AgentProfile) {
 
     fun build(
         userText: String,
         history: List<AgentMessage>,
         skillResults: List<SkillResult>,
-        skillCards: List<AgentSkillCard> = emptyList(),
         toolResults: List<AgentToolResult> = emptyList(),
     ): List<DeepSeekMessage> {
         val system = buildString {
@@ -39,9 +40,6 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             messages += DeepSeekMessage(role, sanitize(msg.content))
         }
         messages += DeepSeekMessage("user", sanitize(userText))
-        if (skillCards.isNotEmpty()) {
-            messages += DeepSeekMessage("system", sanitize(formatSkillCards(skillCards)))
-        }
         if (toolResults.isNotEmpty()) {
             messages += DeepSeekMessage("system", sanitize(formatToolResults(toolResults)))
         }
@@ -51,16 +49,56 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
         return messages
     }
 
-    private fun formatSkillCards(cards: List<AgentSkillCard>): String = buildString {
-        appendLine("已选择的 Skill 工作流：")
-        cards.forEach { card ->
-            appendLine("Skill 工作流：${card.id}")
-            appendLine("标题：${card.title}")
-            appendLine("流程：${card.workflow}")
-            if (card.preferredTools.isNotEmpty()) {
-                appendLine("工具策略：${card.preferredTools.joinToString(" -> ")}")
-            }
+    fun buildToolCalling(
+        userText: String,
+        history: List<AgentMessage>,
+        tools: List<AgentToolDefinition>,
+        loopMessages: List<DeepSeekMessage>,
+    ): List<DeepSeekMessage> {
+        val system = buildString {
+            appendLine("你是 MobiGuide，一个 Star Citizen 资料、SCM 交易和 SCMobiGlas App 能力助手。")
+            appendLine("你不能编造工具结果。")
+            appendLine("如果需要查询资料，必须调用工具。")
+            appendLine("你每次只能输出一个 JSON 对象，不能输出 Markdown，不能输出解释文字。")
+            appendLine()
+            appendLine("你有两种输出类型：")
+            appendLine("""{"type":"tool_call","tool":"工具名称","arguments":{}}""")
+            appendLine("""{"type":"final_answer","answer":"中文回答"}""")
+            appendLine()
+            appendLine("重要规则：")
+            appendLine("- 不允许输出“我去查一下”“稍等我查询”这种自然语言。")
+            appendLine("- 不允许伪造工具结果。")
+            appendLine("- 不允许调用不存在的工具。")
+            appendLine("- 遇到出售、求购、挂单、创建订单、发布订单等请求时，必须调用 draft_scm_order 生成订单草稿。")
+            appendLine("- 订单请求里的“品质850”“质量 900”不是物品名的一部分，调用 draft_scm_order 时必须拆成 quality 参数。")
+            appendLine("- 用户询问“我要买/现在多少钱/哪里买”时，调用 search_market 且 side=sell，查询当前出售挂单。")
+            appendLine("- 用户询问“我要卖/能卖多少钱/有人收吗”时，调用 search_market 且 side=buy，查询当前求购挂单。")
+            appendLine("- 市场列表意图：用户没有指定具体物品，只是在问当前 SCM 市场有哪些订单、有什么货、有什么卖单、在售列表、卖家挂了什么等出售列表时，调用 search_market，arguments 必须包含 query=\"\" 和 side=\"sell\"。")
+            appendLine("- 市场列表意图：用户没有指定具体物品，只是在问当前 SCM 市场有哪些收单、求购列表、有人收什么、买家要什么等求购列表时，调用 search_market，arguments 必须包含 query=\"\" 和 side=\"buy\"。")
+            appendLine("- 市场追问意图：用户在市场查询后追问“谁卖”“谁收”“卖家是谁”“在哪交易”“哪个订单”等卖家、买家、地点或订单详情时，先从最近一条市场工具结果/历史回答中回答；如果历史里缺少该字段，必须复用最近的市场关键词调用 search_market 补查。")
+            appendLine("- 市场问题以 search_market 结果为准；如果 search_market 未命中，就输出 final_answer 说明市场暂无对应出售/求购挂单，不要继续调用 search_scm_item、search_local_index、search_mining 等不相关工具。")
+            appendLine("- 不允许直接创建订单，只能创建订单草稿。")
+            appendLine("- 订单提交必须等待用户确认。")
+            appendLine("- 工具参数必须符合对应 JSON Schema。")
+            appendLine("- 当工具结果不足以回答问题时，可以继续调用另一个工具。")
+            appendLine("- 收到有效 tool_result 后，如果已经足以回答用户问题，必须输出 final_answer；不要重复调用同一个工具和同一组参数。")
+            appendLine("- 当已经有足够信息时，输出 final_answer。")
+            appendLine()
+            appendLine("可用工具：")
+            appendLine(JSONArray(tools.map { it.toJson() }).toString())
         }
+        val messages = mutableListOf(DeepSeekMessage("system", sanitize(system)))
+        history.takeLast(MAX_HISTORY).forEach { msg ->
+            val role = when (msg.role) {
+                AgentMessageRole.ASSISTANT -> "assistant"
+                AgentMessageRole.SYSTEM -> "system"
+                AgentMessageRole.USER -> "user"
+            }
+            messages += DeepSeekMessage(role, sanitize(msg.content))
+        }
+        messages += DeepSeekMessage("user", sanitize(userText))
+        loopMessages.forEach { messages += DeepSeekMessage(it.role, sanitize(it.content)) }
+        return messages
     }
 
     private fun formatToolResults(results: List<AgentToolResult>): String = buildString {

@@ -1,6 +1,8 @@
 package com.euedrc.bugsc.agent
 
 import kotlinx.coroutines.runBlocking
+import com.euedrc.bugsc.market.publish.ItemSearchResult
+import com.euedrc.bugsc.market.transaction.AddressNode
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -35,119 +37,258 @@ class AgentHermesWorkflowTest {
         }
     }
 
+    private class SequenceTransport(private val contents: List<String>) : DeepSeekTransport {
+        val requests = mutableListOf<DeepSeekHttpRequest>()
+        private var index = 0
+
+        override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse {
+            requests += request
+            val content = contents.getOrElse(index) { contents.last() }
+            index += 1
+            return DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":${JSONObject.quote(content)}}}]}""")
+        }
+    }
+
     @Test
-    fun blueprintWorkflowPlansMultipleEvidenceTools() = runBlocking {
-        val blueprint = RecordingTool("search_blueprint", summary = "蓝图未直接命中")
-        val scmBlueprint = RecordingTool("search_scm_blueprint", summary = "SCM 蓝图未直接命中")
-        val mission = RecordingTool("search_mission", summary = "任务未直接命中")
-        val wikelo = RecordingTool("search_wikelo", summary = "维科洛未直接命中")
-        val mining = RecordingTool("search_mining", summary = "材料线索未直接命中")
-        val planner = AgentPlanner(AgentSkillCardProvider.defaultCards())
-        val registry = AgentToolRegistry(listOf(blueprint, scmBlueprint, mission, wikelo, mining))
-        val transport = RecordingTransport()
-        val runtime = AgentRuntime(
-            analyzer = QueryAnalyzer(
-                AgentEntityIndex(
-                    entries = listOf(
-                        AgentEntity("blueprint", "Killshot Rifle", "绝杀 步枪", listOf("绝杀", "Killshot Rifle")),
-                    ),
-                ),
+    fun toolCallingLoopLetsModelChooseToolThenAnswerFromToolResult() = runBlocking {
+        val ship = RecordingTool("search_ship", summary = "C2 Hercules，货仓 696 SCU")
+        val events = mutableListOf<AgentRuntimeEvent>()
+        val transport = SequenceTransport(
+            listOf(
+                """{"type":"tool_call","tool":"search_ship","arguments":{"query":"C2"}}""",
+                """{"type":"final_answer","answer":"C2 Hercules 的货仓是 696 SCU。"}""",
             ),
-            planner = planner,
-            toolRegistry = registry,
+        )
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(ship)),
             promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
             deepSeekClient = DeepSeekClient(transport),
             settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+            observer = events::add,
         )
 
-        runtime.answer("石英怎么做")
+        val answer = runtime.answer("C2 货仓多大")
 
-        assertEquals(listOf("石英"), blueprint.calls.map { it.args["term"] })
-        assertEquals(listOf("石英"), scmBlueprint.calls.map { it.args["term"] })
-        assertEquals(listOf("石英"), mission.calls.map { it.args["term"] })
-        assertEquals(listOf("石英"), wikelo.calls.map { it.args["term"] })
-        assertEquals(listOf("石英"), mining.calls.map { it.args["term"] })
-
-        val requestJson = JSONObject(transport.request.body)
-        val prompt = (0 until requestJson.getJSONArray("messages").length())
-            .joinToString("\n") { requestJson.getJSONArray("messages").getJSONObject(it).getString("content") }
-        assertTrue(prompt.contains("Skill 工作流：blueprint-crafting"))
-        assertTrue(prompt.contains("可用工具证据"))
-        assertTrue(prompt.contains("search_blueprint"))
-        assertTrue(prompt.contains("search_scm_blueprint"))
-        assertTrue(prompt.contains("资料未命中不等于不能回答"))
+        assertEquals("C2 Hercules 的货仓是 696 SCU。", answer)
+        assertEquals(listOf("C2"), ship.calls.map { it.args["query"] })
+        assertEquals(2, transport.requests.size)
+        val secondPrompt = JSONObject(transport.requests[1].body)
+            .getJSONArray("messages")
+            .let { messages -> (0 until messages.length()).joinToString("\n") { messages.getJSONObject(it).getString("content") } }
+        assertTrue(secondPrompt.contains("\"type\":\"tool_result\""))
+        assertTrue(secondPrompt.contains("C2 Hercules"))
+        assertTrue(events.any { it is AgentRuntimeEvent.Thinking })
+        assertTrue(events.any { it is AgentRuntimeEvent.ModelJson && it.content.contains("tool_call") })
+        assertTrue(events.any { it is AgentRuntimeEvent.ToolCallStarted && it.tool == "search_ship" })
+        assertTrue(events.any { it is AgentRuntimeEvent.FinalAnswerReady })
     }
 
     @Test
-    fun pseudoToolCallStillFallsBackToObservations() = runBlocking {
-        val blueprint = RecordingTool("search_blueprint", summary = "Blueprint evidence")
+    fun invalidToolCallingJsonReturnsNoResultFallback() = runBlocking {
+        val ship = RecordingTool("search_ship", summary = "C2 Hercules，货仓 696 SCU")
         val runtime = AgentRuntime(
             analyzer = QueryAnalyzer(),
-            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(listOf(blueprint)),
+            toolRegistry = AgentToolRegistry(listOf(ship)),
             promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
-            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
-                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
-                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"<search><query>石英</query></search>"}}]}""")
-            }),
+            deepSeekClient = DeepSeekClient(SequenceTransport(listOf("我去查一下 C2"))),
             settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
         )
 
-        val answer = runtime.answer("石英蓝图怎么弄")
+        val answer = runtime.answer("C2 货仓多大")
 
-        assertTrue(answer.contains("Blueprint evidence"))
-        assertTrue(!answer.contains("<search>"))
+        assertTrue(answer.contains("没有查到"))
+        assertTrue(answer.contains("C2 货仓多大"))
+        assertTrue(ship.calls.isEmpty())
     }
 
     @Test
-    fun unknownWorkflowSearchesAllLocalEvidenceTools() = runBlocking {
-        val tools = listOf(
-            RecordingTool("search_blueprint"),
-            RecordingTool("search_mission"),
-            RecordingTool("search_wikelo"),
-            RecordingTool("search_mining"),
-            RecordingTool("search_ship"),
-            RecordingTool("search_local_index"),
-        )
+    fun unknownModelOutputTypeReturnsNoResultFallbackInsteadOfLeakingParserError() = runBlocking {
+        val ship = RecordingTool("search_ship", summary = "C2 Hercules，货仓 696 SCU")
         val runtime = AgentRuntime(
             analyzer = QueryAnalyzer(),
-            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(tools),
+            toolRegistry = AgentToolRegistry(listOf(ship)),
             promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
-            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
-                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
-                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"按工具结果总结"}}]}""")
-            }),
+            deepSeekClient = DeepSeekClient(
+                SequenceTransport(
+                    listOf("""{"type":"unknown","answer":"未知输出类型"}"""),
+                ),
+            ),
             settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
         )
 
-        runtime.answer("绝杀")
+        val answer = runtime.answer("科粒晶")
 
-        val called = tools.filter { it.calls.isNotEmpty() }.map { it.name }.toSet()
-        assertEquals(
-            setOf("search_blueprint", "search_mission", "search_wikelo", "search_mining", "search_ship", "search_local_index"),
-            called,
-        )
+        assertTrue(answer.contains("没有查到"))
+        assertTrue(answer.contains("科粒晶"))
+        assertTrue(!answer.contains("未知输出类型"))
+        assertTrue(ship.calls.isEmpty())
     }
 
     @Test
-    fun marketWorkflowCleansNaturalScmSearchPhraseBeforeToolCall() = runBlocking {
-        val item = RecordingTool("search_scm_item")
+    fun unknownToolCallReturnsNoResultFallback() = runBlocking {
+        val ship = RecordingTool("search_ship", summary = "C2 Hercules，货仓 696 SCU")
+        val transport = SequenceTransport(
+            listOf(
+                """{"type":"tool_call","tool":"search_missing","arguments":{"query":"C2"}}""",
+            ),
+        )
         val runtime = AgentRuntime(
             analyzer = QueryAnalyzer(),
-            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(listOf(item, RecordingTool("search_market"))),
+            toolRegistry = AgentToolRegistry(listOf(ship)),
             promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
-            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
-                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
-                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"按工具结果总结"}}]}""")
-            }),
+            deepSeekClient = DeepSeekClient(transport),
             settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
         )
 
-        runtime.answer("就叫绝杀你搜一下scm")
+        val answer = runtime.answer("C2 货仓多大")
 
-        assertEquals(listOf("绝杀"), item.calls.map { it.args["term"] })
+        assertTrue(answer.contains("没有查到"))
+        assertTrue(answer.contains("C2 货仓多大"))
+        assertTrue(!answer.contains("search_missing"))
+        assertTrue(ship.calls.isEmpty())
+    }
+
+    @Test
+    fun missingToolArgumentReturnsNoResultFallback() = runBlocking {
+        val ship = RecordingTool("search_ship", summary = "C2 Hercules，货仓 696 SCU")
+        val transport = SequenceTransport(
+            listOf(
+                """{"type":"tool_call","tool":"search_ship","arguments":{}}""",
+            ),
+        )
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(ship)),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(transport),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+        )
+
+        val answer = runtime.answer("C2 货仓多大")
+
+        assertTrue(answer.contains("没有查到"))
+        assertTrue(answer.contains("C2 货仓多大"))
+        assertTrue(ship.calls.isEmpty())
+    }
+
+    @Test
+    fun toolCallingLoopCanCreateScmOrderDraftForUiConfirmation() = runBlocking {
+        val draftState = ScmOrderDraftToolState()
+        val draftTool = ScmOrderDraftTool(
+            state = draftState,
+            isLoggedIn = { true },
+            itemSearch = {
+                listOf(
+                    ItemSearchResult(
+                        id = 42,
+                        itemName = "绝杀步枪",
+                        itemNameEn = "Killshot Rifle",
+                        thumbnailUrl = "",
+                        thumbnailUrlHd = "",
+                    ),
+                )
+            },
+            addressList = { listOf(AddressNode(id = 7, parentId = 0, name = "死局空间站")) },
+        )
+        val transport = SequenceTransport(
+            listOf(
+                """{"type":"tool_call","tool":"draft_scm_order","arguments":{"query":"出售 绝杀步枪 1 个 单价 50000 地点 死局"}}""",
+                """{"type":"final_answer","answer":"已生成订单草稿，请确认后提交。"}""",
+            ),
+        )
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(draftTool)),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(transport),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+        )
+
+        val answer = runtime.answer("帮我挂单卖绝杀步枪")
+
+        assertEquals("已生成订单草稿，请确认后提交。", answer)
+        assertTrue(draftState.resolved != null)
+        assertEquals("死局空间站", draftState.resolved?.location?.name)
+    }
+
+    @Test
+    fun repeatedToolCallReturnsGroundedFallbackInsteadOfMaxStepError() = runBlocking {
+        val market = RecordingTool("search_market", summary = "科粒晶 出售 1200 aUEC ×10")
+        val transport = SequenceTransport(
+            listOf(
+                """{"type":"tool_call","tool":"search_market","arguments":{"query":"科粒晶","side":"sell"}}""",
+                """{"type":"tool_call","tool":"search_market","arguments":{"query":"科粒晶","side":"sell"}}""",
+            ),
+        )
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(market)),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(transport),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+        )
+
+        val answer = runtime.answer("帮我查一下科粒晶有没有人卖")
+
+        assertTrue(answer.contains("科粒晶"))
+        assertTrue(answer.contains("1200"))
+        assertTrue(!answer.contains("max steps"))
+        assertEquals(1, market.calls.size)
+    }
+
+    @Test
+    fun marketToolFallbackKeepsAllOrderSummaryLines() = runBlocking {
+        val market = object : AgentTool {
+            override val name: String = "search_market"
+            override val description: String = "SCM 市场订单查询"
+
+            override suspend fun run(call: AgentToolCall): AgentToolResult = AgentToolResult(
+                call = call,
+                summary = "联科发安全驱动器 (红色)，出售 500000 aUEC ×10，卖家 seller，地点 列夫斯基\n" +
+                    "联科发安全驱动器 (红色)，出售 700000 aUEC ×5，卖家 seller2，地点 埃弗勒斯空间站",
+                facts = listOf(
+                    AgentFact("订单", "CSDD1"),
+                    AgentFact("卖家", "seller"),
+                    AgentFact("单价", "500000 aUEC"),
+                    AgentFact("地点", "列夫斯基"),
+                    AgentFact("订单", "CSDD2"),
+                    AgentFact("卖家", "seller2"),
+                    AgentFact("单价", "700000 aUEC"),
+                    AgentFact("地点", "埃弗勒斯空间站"),
+                ),
+                sources = listOf(AgentSource("SCM 市场 API", "remote")),
+                confidence = 0.72f,
+            )
+        }
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(market)),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(
+                SequenceTransport(
+                    listOf(
+                        """{"type":"tool_call","tool":"search_market","arguments":{"query":"asd","side":"sell"}}""",
+                        """模型自然语言错误""",
+                    ),
+                ),
+            ),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+        )
+
+        val answer = runtime.answer("asd相关的东西呢")
+
+        assertTrue(answer.contains("500000"))
+        assertTrue(answer.contains("700000"))
+        assertTrue(answer.contains("seller2"))
     }
 
     @Test
@@ -171,31 +312,4 @@ class AgentHermesWorkflowTest {
         assertTrue(result.facts.any { it.value.contains("绝杀 步枪") })
     }
 
-    @Test
-    fun contradictingNoResultAnswerFallsBackToToolEvidence() = runBlocking {
-        val blueprint = RecordingTool("search_blueprint", summary = "绝杀 步枪 / Killshot Rifle 蓝图")
-        val runtime = AgentRuntime(
-            analyzer = QueryAnalyzer(
-                AgentEntityIndex(
-                    entries = listOf(
-                        AgentEntity("blueprint", "Killshot Rifle", "绝杀 步枪", listOf("绝杀", "Killshot Rifle")),
-                    ),
-                ),
-            ),
-            planner = AgentPlanner(AgentSkillCardProvider.defaultCards()),
-            toolRegistry = AgentToolRegistry(listOf(blueprint)),
-            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
-            deepSeekClient = DeepSeekClient(object : DeepSeekTransport {
-                override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
-                    DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":"本地资料中不存在一个官方名称为绝杀的独立物品。"}}]}""")
-            }),
-            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
-        )
-
-        val answer = runtime.answer("绝杀是什么")
-
-        assertTrue("search_blueprint was not called", blueprint.calls.isNotEmpty())
-        assertTrue(answer, answer.contains("Killshot Rifle"))
-        assertTrue(answer, !answer.contains("不存在"))
-    }
 }

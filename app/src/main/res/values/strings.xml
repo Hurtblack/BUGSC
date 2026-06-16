@@ -15,14 +15,14 @@
     <string name="agent_send">发送</string>
     <string name="agent_new_chat">新对话</string>
     <string name="agent_new_chat_started">已开启新对话</string>
-    <string name="agent_status_deepseek">本地 Agent · DeepSeek</string>
+    <string name="agent_status_deepseek">MobiGuide · DeepSeek</string>
     <string name="agent_settings_saved">已保存 DeepSeek 设置</string>
     <string name="agent_test_success">上次连接测试成功</string>
     <string name="agent_test_failure">上次连接测试失败</string>
     <string name="agent_test_not_tested">尚未测试连接</string>
     <string name="agent_test_running">连接测试中…</string>
     <string name="agent_request_failed">Agent 请求失败</string>
-    <string name="tool_scmbot_title">SCMBOT</string>
-    <string name="tool_scmbot_tag">AGENT</string>
-    <string name="tool_scmbot_desc">资料检索、蓝图、矿物、任务与行动建议</string>
+    <string name="tool_scmbot_title">MobiGuide (AI助手)</string>
+    <string name="tool_scmbot_tag">AI</string>
+    <string name="tool_scmbot_desc">资料检索、交易、每日 WB、行政机库与行动建议</string>
 </resources>

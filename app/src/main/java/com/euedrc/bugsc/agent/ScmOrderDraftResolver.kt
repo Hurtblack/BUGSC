@@ -16,6 +16,7 @@ sealed class ScmOrderDraftResolution {
             appendLine("- 物品：${item.displayName()}")
             appendLine("- 数量：${parsed.quantity}")
             appendLine("- 单价：${parsed.unitPrice?.stripTrailingZeros()?.toPlainString()} aUEC")
+            parsed.quality?.let { appendLine("- 品质：$it") }
             appendLine("- 地点：${location.name}")
             appendLine("- 有效期：${parsed.expireTime.label}")
             appendLine("- 状态：${parsed.status.label}")

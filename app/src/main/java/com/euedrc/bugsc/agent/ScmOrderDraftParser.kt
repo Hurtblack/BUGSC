@@ -14,6 +14,7 @@ data class ScmOrderDraftParseResult(
     val locationKeyword: String,
     val status: PublishOrderStatus = PublishOrderStatus.VISIBLE,
     val expireTime: PublishExpireTime = PublishExpireTime.SEVEN_DAYS,
+    val quality: Int? = null,
 ) {
     val missingFields: List<String>
         get() = buildList {
@@ -53,6 +54,8 @@ object ScmOrderDraftParser {
     private val labeledPriceRegex = Regex("""(?:单价|价格|售价|收购价)\s*(\d+(?:\.\d+)?)\s*(w|万)?\s*(?:auec|uec|元|块)?""", RegexOption.IGNORE_CASE)
     private val moneyWithUnitRegex = Regex("""(\d+(?:\.\d+)?)\s*(w|万)?\s*(?:auec|uec|元|块)""", RegexOption.IGNORE_CASE)
     private val locationRegex = Regex("""(?:交易地点|地点|在)\s*(?:是|为|:|：)?\s*([^，,。；;\n]+)""")
+    private val bareLocationRegex = Regex("""地点\s*([^，,。；;\n]+)""")
+    private val qualityRegex = Regex("""(?:品质|质量|quality|q)\s*(\d{1,4})""", RegexOption.IGNORE_CASE)
     private val punctuation = Regex("""[，,。；;\n]+""")
     private val moneyTextRegex = Regex("""(?:单价|价格|售价|收购价)\s*\d+(?:\.\d+)?\s*(?:w|万)?\s*(?:auec|uec|元|块)?|\d+(?:\.\d+)?\s*(?:w|万)\s*(?:auec|uec)?|\d+(?:\.\d+)?\s*(?:auec|uec|元|块)""", RegexOption.IGNORE_CASE)
     private val orderFillerRegex = Regex("""^(我想|我要|请帮我|帮我)?\s*(创建一个|创建|发布一个|发布)?\s*(一个|一件|一把|订单|挂单)?\s*""")
@@ -72,7 +75,10 @@ object ScmOrderDraftParser {
             ?: quantityRegex.findAll(raw).mapNotNull { it.groupValues.getOrNull(1)?.toIntOrNull() }.firstOrNull()
             ?: 1
         val unitPrice = parsePrice(raw)
-        val location = cleanLocation(locationRegex.find(raw)?.groupValues?.getOrNull(1).orEmpty())
+        val location = cleanLocation(
+            (locationRegex.find(raw) ?: bareLocationRegex.find(raw))?.groupValues?.getOrNull(1).orEmpty(),
+        )
+        val quality = parseQuality(raw)
         return ScmOrderDraftParseResult(
             isOrderIntent = isIntent,
             creatorType = creatorType,
@@ -86,6 +92,7 @@ object ScmOrderDraftParser {
                 raw.contains("14天") || raw.contains("十四天") -> PublishExpireTime.FOURTEEN_DAYS
                 else -> PublishExpireTime.SEVEN_DAYS
             },
+            quality = quality,
         )
     }
 
@@ -114,21 +121,37 @@ object ScmOrderDraftParser {
                 raw.contains("永久") || raw.contains("14天") || raw.contains("十四天") -> next.expireTime
                 else -> pending.expireTime
             },
+            quality = next.quality ?: pending.quality,
         )
     }
 
     private fun extractItem(raw: String, creatorType: PublishCreatorType?): String {
+        if (creatorType == PublishCreatorType.SELL) {
+            Regex("""(?:我有一个|我有一件|我有一把|有一个|有一件|有一把|我有)\s*(.+?)\s*(?:想卖|我要卖|出售|卖)""")
+                .find(raw)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.let(::cleanItemText)
+                ?.takeIf(String::isNotBlank)
+                ?.let { return it }
+        }
         val marker = when (creatorType) {
             PublishCreatorType.SELL -> sellWords.firstOrNull { raw.contains(it) }
             PublishCreatorType.BUY -> buyWords.firstOrNull { raw.contains(it) }
             null -> null
         } ?: return ""
         val after = raw.substringAfter(marker, "")
-        return after
+        return cleanItemText(after)
+    }
+
+    private fun cleanItemText(value: String): String =
+        value
             .split(punctuation)
             .firstOrNull()
             .orEmpty()
             .replace(locationRegex, "")
+            .replace(bareLocationRegex, "")
+            .replace(qualityRegex, "")
             .replace(quantityRegex, "")
             .replace(explicitQuantityRegex, "")
             .replace(moneyTextRegex, "")
@@ -139,8 +162,9 @@ object ScmOrderDraftParser {
             .replace(Regex("""单价\s*\d+(?:\.\d+)?.*$"""), "")
             .replace(Regex("""价格\s*\d+(?:\.\d+)?.*$"""), "")
             .replace(Regex("""地点\s*.*$"""), "")
+            .replace(Regex("""想卖.*$"""), "")
+            .replace(Regex("""想买.*$"""), "")
             .trim()
-    }
 
     private fun hasQuantity(raw: String): Boolean =
         explicitQuantityRegex.containsMatchIn(raw) || quantityRegex.containsMatchIn(raw)
@@ -166,6 +190,9 @@ object ScmOrderDraftParser {
             amount
         }
     }
+
+    private fun parseQuality(raw: String): Int? =
+        qualityRegex.find(raw)?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it in 0..1000 }
 
     private fun cleanLocation(value: String): String =
         value.trim()

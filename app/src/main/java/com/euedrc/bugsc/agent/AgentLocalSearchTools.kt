@@ -10,7 +10,14 @@ object AgentLocalSearchTools {
     )
 
     fun create(provider: AgentSearchProvider, entityIndex: AgentEntityIndex): List<AgentTool> =
-        create(provider) + GlobalIndexTool(entityIndex)
+        listOf(
+            LocalSearchTool("search_ship", "飞船资料查询", AgentIntent.SHIP_INFO, provider, entityIndex),
+            LocalSearchTool("search_mining", "矿物资料查询", AgentIntent.MINING, provider, entityIndex),
+            LocalSearchTool("search_blueprint", "蓝图资料查询", AgentIntent.BLUEPRINT, provider, entityIndex),
+            LocalSearchTool("search_mission", "任务资料查询", AgentIntent.MISSION, provider, entityIndex),
+            LocalSearchTool("search_wikelo", "维科洛兑换查询", AgentIntent.WIKELO, provider, entityIndex),
+            GlobalIndexTool(entityIndex),
+        )
 }
 
 private class LocalSearchTool(
@@ -18,16 +25,18 @@ private class LocalSearchTool(
     override val description: String,
     private val intent: AgentIntent,
     private val provider: AgentSearchProvider,
+    private val entityIndex: AgentEntityIndex = AgentEntityIndex(),
 ) : AgentTool {
 
     override suspend fun run(call: AgentToolCall): AgentToolResult {
         val term = call.args["term"].orEmpty().trim()
         val queryText = term.ifBlank { call.args.values.firstOrNull().orEmpty() }
+        val analyzed = QueryAnalyzer(entityIndex).analyze(queryText)
         val query = AgentQuery(
             rawText = queryText,
-            normalizedText = QueryAnalyzer().normalize(queryText),
+            normalizedText = analyzed.normalizedText,
             intents = listOf(ScoredIntent(intent, 10)),
-            entities = emptyList(),
+            entities = analyzed.entities,
         )
         val hits = provider.search(query)
         if (hits.isEmpty()) {

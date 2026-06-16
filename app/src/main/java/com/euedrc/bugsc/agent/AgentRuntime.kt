@@ -1,26 +1,39 @@
 package com.euedrc.bugsc.agent
 
+import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
+
+sealed class AgentRuntimeEvent {
+    data object Thinking : AgentRuntimeEvent()
+    data class ModelJson(val content: String) : AgentRuntimeEvent()
+    data class ToolCallStarted(val tool: String) : AgentRuntimeEvent()
+    data class ToolCallFinished(val tool: String) : AgentRuntimeEvent()
+    data class FinalAnswerReady(val answer: String) : AgentRuntimeEvent()
+}
+
 class AgentRuntime(
     private val analyzer: QueryAnalyzer,
     private val skillRegistry: AgentSkillRegistry? = null,
     private val promptBuilder: AgentPromptBuilder? = null,
     private val deepSeekClient: DeepSeekClient? = null,
     private val settingsProvider: (() -> AgentSettings)? = null,
-    private val planner: AgentPlanner? = null,
     private val toolRegistry: AgentToolRegistry? = null,
+    private val toolCallingEnabled: Boolean = false,
+    private val maxToolCallingSteps: Int = DEFAULT_MAX_TOOL_CALLING_STEPS,
+    private val observer: ((AgentRuntimeEvent) -> Unit)? = null,
 ) {
     suspend fun query(text: String): List<SkillResult> {
         val query = analyzer.analyze(text)
         skillRegistry?.let { return it.execute(query) }
-        val plan = planner?.plan(query) ?: return emptyList()
-        return toolRegistry?.execute(plan.toolCalls)?.map { it.toSkillResult() }.orEmpty()
+        return emptyList()
     }
 
     suspend fun answer(text: String, history: List<AgentMessage> = emptyList()): String {
-        val query = analyzer.analyze(text)
-        if (planner != null && toolRegistry != null) {
-            return answerWithTools(text, history, query)
+        if (toolCallingEnabled && toolRegistry != null) {
+            return answerWithToolCallingLoop(text, history)
         }
+        val query = analyzer.analyze(text)
         val results = skillRegistry?.execute(query).orEmpty()
         val fallback = fallbackAnswer(text, results)
         val builder = promptBuilder ?: return fallback
@@ -30,42 +43,69 @@ class AgentRuntime(
         return if (answer.looksLikePseudoToolCall()) fallback else answer
     }
 
-    private suspend fun answerWithTools(
+    private suspend fun answerWithToolCallingLoop(
         text: String,
         history: List<AgentMessage>,
-        query: AgentQuery,
     ): String {
-        val plan = planner?.plan(query) ?: AgentPlan(emptyList(), emptyList())
-        val toolResults = toolRegistry?.execute(plan.toolCalls).orEmpty()
-        val fallback = fallbackToolAnswer(text, toolResults)
-        val builder = promptBuilder ?: return fallback
-        val client = deepSeekClient ?: return fallback
+        val registry = toolRegistry ?: throw AgentToolCallParseException("tool registry unavailable")
+        val builder = promptBuilder ?: throw AgentToolCallParseException("prompt builder unavailable")
+        val client = deepSeekClient ?: throw AgentToolCallParseException("deepseek client unavailable")
         val settings = settingsProvider?.invoke() ?: throw DeepSeekClientException("请先配置 DeepSeek")
-        val answer = client.chat(
-            settings,
-            builder.build(
-                userText = text,
-                history = history,
-                skillResults = emptyList(),
-                skillCards = plan.skillCards,
-                toolResults = toolResults,
-            ),
-        )
-        return if (answer.looksLikePseudoToolCall() || answer.contradictsUsefulToolResults(toolResults)) fallback else answer
+        val executor = AgentToolExecutor(registry)
+        val loopMessages = mutableListOf<DeepSeekMessage>()
+        val toolResults = mutableListOf<AgentToolResult>()
+        val seenCalls = LinkedHashSet<String>()
+        repeat(maxToolCallingSteps) {
+            observer?.invoke(AgentRuntimeEvent.Thinking)
+            val content = client.chat(
+                settings,
+                builder.buildToolCalling(
+                    userText = text,
+                    history = history,
+                    tools = registry.definitions(),
+                    loopMessages = loopMessages,
+                ),
+            )
+            runCatching { Log.d(TAG, "model_json=$content") }
+            observer?.invoke(AgentRuntimeEvent.ModelJson(content))
+            val action = AgentToolCallParser.parse(content).getOrElse {
+                return groundedLoopFallback(text, toolResults)
+            }
+            when (action) {
+                is AgentModelAction.FinalAnswer -> {
+                    if (action.answer.looksLikePseudoToolCall()) {
+                        return groundedLoopFallback(text, toolResults)
+                    }
+                    observer?.invoke(AgentRuntimeEvent.FinalAnswerReady(action.answer))
+                    return action.answer
+                }
+                is AgentModelAction.ToolCall -> {
+                    val call = AgentToolCall(
+                        tool = action.tool,
+                        args = action.arguments,
+                        reason = "model_tool_call",
+                    )
+                    val callKey = call.stableKey()
+                    if (!seenCalls.add(callKey)) {
+                        return groundedLoopFallback(text, toolResults)
+                    }
+                    observer?.invoke(AgentRuntimeEvent.ToolCallStarted(call.tool))
+                    val result = executor.execute(call)
+                    if (result.error != null) {
+                        return groundedLoopFallback(text, toolResults + result)
+                    }
+                    runCatching { Log.d(TAG, "tool_result=${formatToolResultMessage(result)}") }
+                    toolResults += result
+                    observer?.invoke(AgentRuntimeEvent.ToolCallFinished(call.tool))
+                    loopMessages += DeepSeekMessage("assistant", content)
+                    loopMessages += DeepSeekMessage("system", formatToolResultMessage(result))
+                }
+            }
+        }
+        return groundedLoopFallback(text, toolResults)
     }
 
     private fun fallbackAnswer(text: String, results: List<SkillResult>): String {
-        val useful = results.filter { it.hasUsefulData() }
-        if (useful.isNotEmpty()) {
-            return formatUsefulResults(
-                summaries = useful.map { it.summary },
-                facts = useful.flatMap { it.facts },
-            )
-        }
-        return "没有查到“$text”的可靠资料。\n可以换中文名、英文名或更完整的物品名再试。"
-    }
-
-    private fun fallbackToolAnswer(text: String, results: List<AgentToolResult>): String {
         val useful = results.filter { it.hasUsefulData() }
         if (useful.isNotEmpty()) {
             return formatUsefulResults(
@@ -84,6 +124,14 @@ class AgentRuntime(
             .filter { it.value.isNotBlank() }
             .groupBy { it.label }
             .mapValues { (_, values) -> values.map { it.value }.distinct() }
+        if (valuesByLabel.keys.any { it in setOf("订单", "单价", "卖家") }) {
+            return summaries
+                .filter(String::isNotBlank)
+                .flatMap { it.lineSequence().map(String::trim).filter(String::isNotBlank).toList() }
+                .distinct()
+                .take(6)
+                .joinToString("\n")
+        }
         val blueprints = valuesByLabel["蓝图"].orEmpty().take(3)
         if (blueprints.isNotEmpty()) {
             return buildString {
@@ -130,6 +178,26 @@ class AgentRuntime(
     private fun AgentToolResult.hasUsefulData(): Boolean =
         error == null && confidence > 0f && (facts.isNotEmpty() || !summary.contains("未命中"))
 
+    private fun groundedLoopFallback(text: String, results: List<AgentToolResult>): String {
+        val useful = results.filter { it.hasUsefulData() }
+        if (useful.isNotEmpty()) {
+            return formatUsefulResults(
+                summaries = useful.map { it.summary },
+                facts = useful.flatMap { it.facts },
+            ).ifBlank { useful.joinToString("\n") { it.summary }.trim() }
+        }
+        val summaries = results
+            .filter { it.error == null }
+            .map { it.summary.trim() }
+            .filter(String::isNotBlank)
+            .distinct()
+        return if (summaries.isNotEmpty()) {
+            summaries.take(3).joinToString("\n")
+        } else {
+            "没有查到“$text”的可靠资料。"
+        }
+    }
+
     private fun AgentToolResult.toSkillResult(): SkillResult = SkillResult(
         skillId = call.tool,
         summary = summary,
@@ -138,6 +206,37 @@ class AgentRuntime(
         confidence = confidence,
         error = error,
     )
+
+    private fun formatToolResultMessage(result: AgentToolResult): String =
+        JSONObject()
+            .put("type", "tool_result")
+            .put("tool", result.call.tool)
+            .put("summary", result.summary)
+            .put(
+                "facts",
+                JSONArray(
+                    result.facts.map { fact ->
+                        JSONObject()
+                            .put("label", fact.label)
+                            .put("value", fact.value)
+                    },
+                ),
+            )
+            .put(
+                "sources",
+                JSONArray(
+                    result.sources.map { source ->
+                        JSONObject()
+                            .put("name", source.name)
+                            .put("type", source.type)
+                            .put("detail", source.detail)
+                    },
+                ),
+            )
+            .toString()
+
+    private fun AgentToolCall.stableKey(): String =
+        tool + "|" + args.toSortedMap().entries.joinToString("&") { (key, value) -> "$key=$value" }
 
     private fun String.looksLikePseudoToolCall(): Boolean {
         val value = trim().lowercase()
@@ -150,23 +249,8 @@ class AgentRuntime(
             value.contains("正在查询")
     }
 
-    private fun String.contradictsUsefulToolResults(results: List<AgentToolResult>): Boolean {
-        if (results.none { it.hasUsefulData() }) return false
-        return NO_RESULT_PHRASES.any { contains(it, ignoreCase = true) }
-    }
-
     companion object {
-        private val NO_RESULT_PHRASES = listOf(
-            "不存在",
-            "没有直接名为",
-            "没有直接叫",
-            "没有命中",
-            "未命中",
-            "查不到",
-            "找不到",
-            "没有找到",
-            "没有一个官方名称",
-            "不是游戏内置的正式译名",
-        )
+        private const val TAG = "MobiGuide"
+        private const val DEFAULT_MAX_TOOL_CALLING_STEPS = 6
     }
 }

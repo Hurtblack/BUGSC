@@ -19,7 +19,7 @@ class QueryAnalyzer(private val entityIndex: AgentEntityIndex = AgentEntityIndex
             AgentIntent.MINING to score(text, "矿", "采", "挖", "精炼", "ore", "mining"),
             AgentIntent.BLUEPRINT to score(text, "蓝图", "材料", "制作", "怎么做", "怎么弄", "如何做", "合成", "配方", "craft", "blueprint"),
             AgentIntent.MISSION to score(text, "任务", "声望", "奖励", "合约", "哪里来", "哪里拿"),
-            AgentIntent.MARKET to score(text, "哪里买", "价格", "市场", "出售", "scm"),
+            AgentIntent.MARKET to score(text, "哪里买", "价格", "市场", "出售", "求购", "挂单", "订单", "创建订单", "发布订单", "scm"),
             AgentIntent.WIKELO to score(text, "维科洛", "wikelo", "兑换"),
         )
         val positive = scores
