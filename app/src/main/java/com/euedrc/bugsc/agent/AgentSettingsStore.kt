@@ -17,12 +17,19 @@ enum class AgentAuthMode {
     API_KEY,
 }
 
+data class AgentModelOption(
+    val id: String,
+    val label: String = id,
+)
+
 data class AgentProviderPreset(
     val id: String,
     val label: String,
     val defaultBaseUrl: String,
     val defaultModel: String,
     val defaultAuthMode: AgentAuthMode,
+    val modelOptions: List<AgentModelOption> = emptyList(),
+    val exposesAdvancedSettings: Boolean = false,
 )
 
 data class AgentSettings(
@@ -107,10 +114,41 @@ class AgentSettingsStore(private val kv: AgentSettingsKvStore) {
         const val KEY_LAST_TEST_STATUS = "deepseekLastTestStatus"
 
         val PROVIDER_PRESETS: List<AgentProviderPreset> = listOf(
-            AgentProviderPreset(PROVIDER_DEEPSEEK, "DeepSeek", BASE_URL_DEEPSEEK, MODEL_DEEPSEEK_FLASH, AgentAuthMode.BEARER),
-            AgentProviderPreset(PROVIDER_KIMI, "Kimi / Moonshot", BASE_URL_KIMI, MODEL_KIMI_K2_5, AgentAuthMode.BEARER),
-            AgentProviderPreset(PROVIDER_XIAOMI_MIMO, "Xiaomi MiMo", BASE_URL_XIAOMI_MIMO, MODEL_XIAOMI_MIMO_PRO, AgentAuthMode.API_KEY),
-            AgentProviderPreset(PROVIDER_CUSTOM, "OpenAI-Compatible", "", "", AgentAuthMode.BEARER),
+            AgentProviderPreset(
+                id = PROVIDER_DEEPSEEK,
+                label = "DeepSeek",
+                defaultBaseUrl = BASE_URL_DEEPSEEK,
+                defaultModel = MODEL_DEEPSEEK_FLASH,
+                defaultAuthMode = AgentAuthMode.BEARER,
+                modelOptions = listOf(
+                    AgentModelOption(MODEL_DEEPSEEK_FLASH),
+                    AgentModelOption(MODEL_DEEPSEEK_PRO),
+                ),
+            ),
+            AgentProviderPreset(
+                id = PROVIDER_KIMI,
+                label = "Kimi / Moonshot",
+                defaultBaseUrl = BASE_URL_KIMI,
+                defaultModel = MODEL_KIMI_K2_5,
+                defaultAuthMode = AgentAuthMode.BEARER,
+                modelOptions = listOf(AgentModelOption(MODEL_KIMI_K2_5)),
+            ),
+            AgentProviderPreset(
+                id = PROVIDER_XIAOMI_MIMO,
+                label = "Xiaomi MiMo",
+                defaultBaseUrl = BASE_URL_XIAOMI_MIMO,
+                defaultModel = MODEL_XIAOMI_MIMO_PRO,
+                defaultAuthMode = AgentAuthMode.API_KEY,
+                modelOptions = listOf(AgentModelOption(MODEL_XIAOMI_MIMO_PRO)),
+            ),
+            AgentProviderPreset(
+                id = PROVIDER_CUSTOM,
+                label = "OpenAI-Compatible",
+                defaultBaseUrl = "",
+                defaultModel = "",
+                defaultAuthMode = AgentAuthMode.BEARER,
+                exposesAdvancedSettings = true,
+            ),
         )
 
         fun providerPreset(id: String): AgentProviderPreset =

@@ -7,13 +7,13 @@
     <string name="agent_provider_deepseek">DeepSeek（默认）</string>
     <string name="agent_provider_kimi">Kimi / Moonshot</string>
     <string name="agent_provider_mimo">小米 MiMo</string>
-    <string name="agent_provider_custom">自定义 OpenAI-Compatible</string>
+    <string name="agent_provider_custom">自定义 OpenAI 兼容接口</string>
     <string name="agent_api_key_label">API Key</string>
     <string name="agent_api_key_hint">sk-...</string>
-    <string name="agent_model_label">Model ID</string>
-    <string name="agent_model_hint">例如 deepseek-v4-flash / kimi-k2.5 / mimo-v2.5-pro</string>
+    <string name="agent_model_label">模型</string>
+    <string name="agent_model_hint">自定义模型 ID</string>
     <string name="agent_base_url_label">Base URL</string>
-    <string name="agent_base_url_hint">https://api.deepseek.com</string>
+    <string name="agent_base_url_hint">https://api.example.com/v1</string>
     <string name="agent_auth_label">鉴权方式</string>
     <string name="agent_auth_bearer">Authorization: Bearer</string>
     <string name="agent_auth_api_key">api-key Header</string>

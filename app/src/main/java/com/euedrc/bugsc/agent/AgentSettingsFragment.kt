@@ -21,8 +21,15 @@ class AgentSettingsFragment : Fragment() {
 
     private lateinit var store: AgentSettingsStore
     private lateinit var etKey: EditText
+    private lateinit var tvModelLabel: TextView
+    private lateinit var rgModelOptions: RadioGroup
+    private lateinit var rbModelOption1: RadioButton
+    private lateinit var rbModelOption2: RadioButton
     private lateinit var etModel: EditText
+    private lateinit var tvBaseUrlLabel: TextView
     private lateinit var etBaseUrl: EditText
+    private lateinit var tvAuthLabel: TextView
+    private lateinit var rgAuth: RadioGroup
     private lateinit var rgProvider: RadioGroup
     private lateinit var rbProviderDeepSeek: RadioButton
     private lateinit var rbProviderKimi: RadioButton
@@ -31,6 +38,7 @@ class AgentSettingsFragment : Fragment() {
     private lateinit var rbAuthBearer: RadioButton
     private lateinit var rbAuthApiKey: RadioButton
     private lateinit var tvStatus: TextView
+    private var binding = false
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_agent_settings, parent, false)
@@ -39,8 +47,15 @@ class AgentSettingsFragment : Fragment() {
         super.onViewCreated(view, state)
         store = AgentStores.settings(requireContext())
         etKey = view.findViewById(R.id.et_agent_api_key)
+        tvModelLabel = view.findViewById(R.id.tv_agent_model_label)
+        rgModelOptions = view.findViewById(R.id.rg_agent_model_options)
+        rbModelOption1 = view.findViewById(R.id.rb_agent_model_option_1)
+        rbModelOption2 = view.findViewById(R.id.rb_agent_model_option_2)
         etModel = view.findViewById(R.id.et_agent_model)
+        tvBaseUrlLabel = view.findViewById(R.id.tv_agent_base_url_label)
         etBaseUrl = view.findViewById(R.id.et_agent_base_url)
+        tvAuthLabel = view.findViewById(R.id.tv_agent_auth_label)
+        rgAuth = view.findViewById(R.id.rg_agent_auth)
         rgProvider = view.findViewById(R.id.rg_agent_provider)
         rbProviderDeepSeek = view.findViewById(R.id.rb_agent_provider_deepseek)
         rbProviderKimi = view.findViewById(R.id.rb_agent_provider_kimi)
@@ -49,7 +64,9 @@ class AgentSettingsFragment : Fragment() {
         rbAuthBearer = view.findViewById(R.id.rb_agent_auth_bearer)
         rbAuthApiKey = view.findViewById(R.id.rb_agent_auth_api_key)
         tvStatus = view.findViewById(R.id.tv_agent_setting_status)
-        rgProvider.setOnCheckedChangeListener { _, _ -> applySelectedPreset() }
+        rgProvider.setOnCheckedChangeListener { _, _ ->
+            if (!binding) applySelectedPreset()
+        }
         view.findViewById<Button>(R.id.btn_agent_save).setOnClickListener { save() }
         view.findViewById<Button>(R.id.btn_agent_test).setOnClickListener { testConnection() }
         bind()
@@ -57,33 +74,41 @@ class AgentSettingsFragment : Fragment() {
 
     private fun bind() {
         val s = store.settings()
-        etKey.setText(s.apiKey)
-        when (s.providerId) {
-            AgentSettingsStore.PROVIDER_KIMI -> rbProviderKimi.isChecked = true
-            AgentSettingsStore.PROVIDER_XIAOMI_MIMO -> rbProviderMimo.isChecked = true
-            AgentSettingsStore.PROVIDER_CUSTOM -> rbProviderCustom.isChecked = true
-            else -> rbProviderDeepSeek.isChecked = true
-        }
-        etModel.setText(s.model)
-        etBaseUrl.setText(s.effectiveBaseUrl)
-        rbAuthApiKey.isChecked = s.authMode == AgentAuthMode.API_KEY
-        rbAuthBearer.isChecked = !rbAuthApiKey.isChecked
-        tvStatus.text = when (s.lastTestStatus) {
-            AgentConnectionStatus.SUCCESS -> getString(R.string.agent_test_success)
-            AgentConnectionStatus.FAILURE -> getString(R.string.agent_test_failure)
-            AgentConnectionStatus.NOT_TESTED -> getString(R.string.agent_test_not_tested)
+        binding = true
+        try {
+            etKey.setText(s.apiKey)
+            when (s.providerId) {
+                AgentSettingsStore.PROVIDER_KIMI -> rbProviderKimi.isChecked = true
+                AgentSettingsStore.PROVIDER_XIAOMI_MIMO -> rbProviderMimo.isChecked = true
+                AgentSettingsStore.PROVIDER_CUSTOM -> rbProviderCustom.isChecked = true
+                else -> rbProviderDeepSeek.isChecked = true
+            }
+            etModel.setText(s.model)
+            etBaseUrl.setText(s.effectiveBaseUrl)
+            rbAuthApiKey.isChecked = s.authMode == AgentAuthMode.API_KEY
+            rbAuthBearer.isChecked = !rbAuthApiKey.isChecked
+            renderProviderFields(s.model)
+            tvStatus.text = when (s.lastTestStatus) {
+                AgentConnectionStatus.SUCCESS -> getString(R.string.agent_test_success)
+                AgentConnectionStatus.FAILURE -> getString(R.string.agent_test_failure)
+                AgentConnectionStatus.NOT_TESTED -> getString(R.string.agent_test_not_tested)
+            }
+        } finally {
+            binding = false
         }
     }
 
     private fun save(status: AgentConnectionStatus? = null) {
         val current = store.settings()
+        val providerId = selectedProviderId()
+        val preset = AgentSettingsStore.providerPreset(providerId)
         store.save(
             AgentSettings(
                 apiKey = etKey.text.toString().trim(),
-                providerId = selectedProviderId(),
-                model = etModel.text.toString().trim(),
-                baseUrl = etBaseUrl.text.toString().trim(),
-                authMode = selectedAuthMode(),
+                providerId = providerId,
+                model = selectedModel(preset),
+                baseUrl = selectedBaseUrl(preset),
+                authMode = selectedAuthMode(preset),
                 lastTestAt = if (status == null) current.lastTestAt else System.currentTimeMillis(),
                 lastTestStatus = status ?: current.lastTestStatus,
             ),
@@ -113,13 +138,72 @@ class AgentSettingsFragment : Fragment() {
     private fun selectedAuthMode(): AgentAuthMode =
         if (rbAuthApiKey.isChecked) AgentAuthMode.API_KEY else AgentAuthMode.BEARER
 
+    private fun selectedAuthMode(preset: AgentProviderPreset): AgentAuthMode =
+        if (preset.exposesAdvancedSettings) selectedAuthMode() else preset.defaultAuthMode
+
+    private fun selectedBaseUrl(preset: AgentProviderPreset): String =
+        if (preset.exposesAdvancedSettings) etBaseUrl.text.toString().trim() else preset.defaultBaseUrl
+
+    private fun selectedModel(preset: AgentProviderPreset): String {
+        if (preset.exposesAdvancedSettings) return etModel.text.toString().trim()
+        val checkedModel = modelOptionButtons()
+            .firstOrNull { it.id == rgModelOptions.checkedRadioButtonId }
+            ?.tag as? String
+        return checkedModel?.takeIf { it.isNotBlank() } ?: preset.defaultModel
+    }
+
     private fun applySelectedPreset() {
         val preset = AgentSettingsStore.providerPreset(selectedProviderId())
-        if (selectedProviderId() != AgentSettingsStore.PROVIDER_CUSTOM) {
+        if (!preset.exposesAdvancedSettings) {
             etModel.setText(preset.defaultModel)
             etBaseUrl.setText(preset.defaultBaseUrl)
             rbAuthApiKey.isChecked = preset.defaultAuthMode == AgentAuthMode.API_KEY
             rbAuthBearer.isChecked = preset.defaultAuthMode == AgentAuthMode.BEARER
         }
+        renderProviderFields(preset.defaultModel)
+    }
+
+    private fun renderProviderFields(selectedModel: String) {
+        val preset = AgentSettingsStore.providerPreset(selectedProviderId())
+        val advancedVisibility = if (preset.exposesAdvancedSettings) View.VISIBLE else View.GONE
+        val presetVisibility = if (preset.exposesAdvancedSettings) View.GONE else View.VISIBLE
+        rgModelOptions.visibility = presetVisibility
+        etModel.visibility = advancedVisibility
+        tvBaseUrlLabel.visibility = advancedVisibility
+        etBaseUrl.visibility = advancedVisibility
+        tvAuthLabel.visibility = advancedVisibility
+        rgAuth.visibility = advancedVisibility
+        configureModelOptions(preset, selectedModel)
+        if (!preset.exposesAdvancedSettings) {
+            etModel.setText(selectedModel.ifBlank { preset.defaultModel })
+            etBaseUrl.setText(preset.defaultBaseUrl)
+            rbAuthApiKey.isChecked = preset.defaultAuthMode == AgentAuthMode.API_KEY
+            rbAuthBearer.isChecked = preset.defaultAuthMode == AgentAuthMode.BEARER
+        }
+        tvModelLabel.visibility = View.VISIBLE
+    }
+
+    private fun configureModelOptions(preset: AgentProviderPreset, selectedModel: String) {
+        rgModelOptions.clearCheck()
+        modelOptionButtons().forEachIndexed { index, button ->
+            val option = preset.modelOptions.getOrNull(index)
+            if (option == null) {
+                button.visibility = View.GONE
+                button.isChecked = false
+                button.tag = null
+            } else {
+                button.visibility = View.VISIBLE
+                button.text = option.label
+                button.tag = option.id
+                button.isChecked = option.id == selectedModel
+            }
+        }
+        if (preset.modelOptions.isNotEmpty() && rgModelOptions.checkedRadioButtonId == View.NO_ID) {
+            modelOptionButtons().first().isChecked = true
+        }
+    }
+
+    private fun modelOptionButtons(): List<RadioButton> {
+        return listOf(rbModelOption1, rbModelOption2)
     }
 }

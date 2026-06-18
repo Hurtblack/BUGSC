@@ -98,6 +98,31 @@ class AgentSettingsStoreTest {
     }
 
     @Test
+    fun presetProvidersExposeModelOptionsAndHideAdvancedSettings() {
+        val deepSeek = AgentSettingsStore.providerPreset(AgentSettingsStore.PROVIDER_DEEPSEEK)
+        val kimi = AgentSettingsStore.providerPreset(AgentSettingsStore.PROVIDER_KIMI)
+        val mimo = AgentSettingsStore.providerPreset(AgentSettingsStore.PROVIDER_XIAOMI_MIMO)
+
+        assertFalse(deepSeek.exposesAdvancedSettings)
+        assertEquals(
+            listOf(AgentSettingsStore.MODEL_DEEPSEEK_FLASH, AgentSettingsStore.MODEL_DEEPSEEK_PRO),
+            deepSeek.modelOptions.map { it.id },
+        )
+        assertFalse(kimi.exposesAdvancedSettings)
+        assertEquals(listOf(AgentSettingsStore.MODEL_KIMI_K2_5), kimi.modelOptions.map { it.id })
+        assertFalse(mimo.exposesAdvancedSettings)
+        assertEquals(listOf(AgentSettingsStore.MODEL_XIAOMI_MIMO_PRO), mimo.modelOptions.map { it.id })
+    }
+
+    @Test
+    fun customProviderShowsAdvancedSettingsAndUsesFreeformModel() {
+        val custom = AgentSettingsStore.providerPreset(AgentSettingsStore.PROVIDER_CUSTOM)
+
+        assertTrue(custom.exposesAdvancedSettings)
+        assertTrue(custom.modelOptions.isEmpty())
+    }
+
+    @Test
     fun clearRemovesApiKeyAndConnectionState() {
         val kv = FakeKv()
         val store = AgentSettingsStore(kv)

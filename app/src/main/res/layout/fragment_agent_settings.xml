@@ -110,12 +110,35 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/tv_agent_model_label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:text="@string/agent_model_label"
                 android:textColor="@color/sc_text_mid"
                 android:textSize="13sp" />
+
+            <RadioGroup
+                android:id="@+id/rg_agent_model_options"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/rb_agent_model_option_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_agent_model_option_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+            </RadioGroup>
 
             <EditText
                 android:id="@+id/et_agent_model"
@@ -133,6 +156,7 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/tv_agent_base_url_label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -156,6 +180,7 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/tv_agent_auth_label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
