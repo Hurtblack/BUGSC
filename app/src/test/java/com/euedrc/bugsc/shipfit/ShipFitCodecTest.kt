@@ -27,5 +27,32 @@ class ShipFitCodecTest {
         assertTrue(result is DecodeResult.Error)
         assertEquals("INVALID_PREFIX", (result as DecodeResult.Error).code)
     }
-}
 
+    @Test
+    fun decode_extractsCodeFromNaturalTextWithFullWidthColon() {
+        val payload = ShipFitPayload(
+            ship = "aegs_gladius",
+            slots = linkedMapOf("gun-1" to "cf337")
+        )
+        val code = ShipFitCodec.encode(payload).replace(":", "：")
+
+        val decoded = ShipFitCodec.decode("这是我的配船码：$code\n你帮我解析一下")
+
+        assertTrue(decoded is DecodeResult.Success)
+        assertEquals(payload, (decoded as DecodeResult.Success).payload)
+    }
+
+    @Test
+    fun decode_extractsCodeFromShareUrlParameter() {
+        val payload = ShipFitPayload(
+            ship = "drak_cutlass_black",
+            slots = linkedMapOf("sh1" to "fr76")
+        )
+        val code = ShipFitCodec.encode(payload)
+
+        val decoded = ShipFitCodec.decode("https://example.local/fit?code=$code")
+
+        assertTrue(decoded is DecodeResult.Success)
+        assertEquals(payload, (decoded as DecodeResult.Success).payload)
+    }
+}

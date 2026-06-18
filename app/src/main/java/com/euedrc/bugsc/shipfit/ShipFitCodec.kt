@@ -1,6 +1,8 @@
 package com.euedrc.bugsc.shipfit
 
 import org.json.JSONObject
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 data class ShipFitPayload(
@@ -29,7 +31,8 @@ object ShipFitCodec {
     }
 
     fun decode(code: String): DecodeResult {
-        val parts = code.trim().split(":")
+        val normalizedCode = extractCode(code)
+        val parts = normalizedCode.split(":")
         if (parts.size != 3 || parts[0] != PREFIX) {
             return DecodeResult.Error("INVALID_PREFIX", "不是有效的 BUGFIT 配船码")
         }
@@ -64,4 +67,22 @@ object ShipFitCodec {
         }
         return DecodeResult.Success(ShipFitPayload(ship = ship, slots = slots))
     }
+
+    private fun extractCode(raw: String): String {
+        val normalized = raw.trim().replace('：', ':')
+        urlParamRegex.find(normalized)?.let { match ->
+            val encoded = match.groupValues[2].trim()
+            return decodeUrlComponent(encoded).replace('：', ':')
+        }
+        codeRegex.find(normalized)?.let { match ->
+            return "$PREFIX:$VERSION:${match.groupValues[1].trim()}"
+        }
+        return normalized.replace(Regex("""\s+"""), "")
+    }
+
+    private fun decodeUrlComponent(value: String): String =
+        runCatching { URLDecoder.decode(value, StandardCharsets.UTF_8.name()) }.getOrDefault(value)
+
+    private val codeRegex = Regex("""BUGFIT\s*:\s*v1\s*:\s*([A-Za-z0-9_-]+={0,2})""", RegexOption.IGNORE_CASE)
+    private val urlParamRegex = Regex("""(?:[?&](code|fit)=)([^&#\s]+)""", RegexOption.IGNORE_CASE)
 }
