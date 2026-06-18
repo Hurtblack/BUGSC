@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -52,6 +53,8 @@ private val AccentLine = Color(0xFFFF9A3C)
 // 透明：让根布局的 HUD 背景透过底栏，无缝衔接内容区
 private val BarBg = Color.Transparent
 private val Divider = Color(0x332A4862)
+private val BottomBarHorizontalPadding = 16.dp
+private val BottomBarTabMaxWidth = 78.dp
 
 /**
  * mobiGlas 风格底部栏：整条后仰透视，选中项图标以底边为铰链立起，
@@ -76,27 +79,35 @@ fun MobiGlasBottomBar(
                     .height(1.dp)
                     .background(Divider),
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(108.dp)
-                    // 整条 bar 后仰透视，像低头看手腕上的手环 (顶边后退)
-                    .graphicsLayer {
-                        transformOrigin = TransformOrigin(0.5f, 1f)
-                        rotationX = 26f
-                        cameraDistance = 9f * density.density
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val tabWidth = calculateMobiGlasTabWidth(maxWidth, items.size)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(108.dp)
+                        // 整条 bar 后仰透视，像低头看手腕上的手环 (顶边后退)
+                        .graphicsLayer {
+                            transformOrigin = TransformOrigin(0.5f, 1f)
+                            rotationX = 26f
+                            cameraDistance = 9f * density.density
+                        }
+                        .padding(horizontal = BottomBarHorizontalPadding, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    items.forEachIndexed { index, item ->
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            MobiGlasTab(
+                                item = item,
+                                selected = index == selectedIndex,
+                                showBadge = index in badgeIndices,
+                                tabWidth = tabWidth,
+                                onClick = { onSelect(index) },
+                            )
+                        }
                     }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                items.forEachIndexed { index, item ->
-                    MobiGlasTab(
-                        item = item,
-                        selected = index == selectedIndex,
-                        showBadge = index in badgeIndices,
-                        onClick = { onSelect(index) },
-                    )
                 }
             }
         }
@@ -104,7 +115,13 @@ fun MobiGlasBottomBar(
 }
 
 @Composable
-private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, showBadge: Boolean, onClick: () -> Unit) {
+private fun MobiGlasTab(
+    item: MobiGlasItem,
+    selected: Boolean,
+    showBadge: Boolean,
+    tabWidth: Dp,
+    onClick: () -> Unit,
+) {
     val density = LocalDensity.current
 
     // 选中时内容更接近“竖立”状态，并带一点手环风格的放大。
@@ -142,7 +159,7 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, showBadge: Boolea
 
     Box(
         modifier = Modifier
-            .width(78.dp)
+            .width(tabWidth)
             .height(60.dp)
             .graphicsLayer {
                 translationY = frameLift.toPx()
@@ -204,6 +221,17 @@ private fun MobiGlasTab(item: MobiGlasItem, selected: Boolean, showBadge: Boolea
             )
         }
     }
+}
+
+internal fun calculateMobiGlasTabWidth(
+    maxWidth: Dp,
+    itemCount: Int,
+    horizontalPadding: Dp = BottomBarHorizontalPadding,
+    maxTabWidth: Dp = BottomBarTabMaxWidth,
+): Dp {
+    if (itemCount <= 0) return 0.dp
+    val available = maxWidth - (horizontalPadding * 2)
+    return (available / itemCount).coerceAtMost(maxTabWidth).coerceAtLeast(0.dp)
 }
 
 @Composable
