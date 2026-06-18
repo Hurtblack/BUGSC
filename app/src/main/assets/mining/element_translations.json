@@ -1,10 +1,10 @@
 {
-  "_version": 1780897734,
+  "_version": 1781754386,
   "meta": {
     "matched": 38,
     "total": 38,
     "source": "flowcld SCM cats 81/82/201",
-    "generatedAt": 1780897734
+    "generatedAt": 1781754386
   },
   "translations": {
     "Agricium (Ore)": "艾格瑞矿石 (8SCU货箱)",
@@ -24,7 +24,7 @@
     "Glacosite": "冰碛棉",
     "Gold (Ore)": "金矿石 (8SCU货箱)",
     "Hadanite": "哈丹水晶",
-    "Hephaestanite (Raw)": "火神石 (精炼矿物)",
+    "Hephaestanite (Raw)": "火神石 (精炼矿物 1SCU货箱)",
     "Ice (Raw)": "冰 (原料)",
     "Iron (Ore)": "铁矿石 (2SCU货箱)",
     "Jaclium": "杰金矿石",
