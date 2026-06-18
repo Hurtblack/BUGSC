@@ -146,6 +146,32 @@ class AgentRuntimeTest {
         assertFalse(deltas.any { it.contains("你好，这个可以这样看") })
     }
 
+    @Test
+    fun casualChatDoesNotFallBackToNoReliableData() = runBlocking {
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(EmptyTool())),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(
+                StreamSequenceTransport(
+                    listOf(
+                        listOf(
+                            streamDelta(content = "我去查一下你想聊什么。"),
+                            "[DONE]",
+                        ),
+                    ),
+                ),
+            ),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+        )
+
+        val answer = runtime.answer("你好")
+
+        assertFalse(answer.contains("没有查到"))
+        assertTrue(answer.contains("我在") || answer.contains("可以聊"))
+    }
+
     private fun runtime(result: SkillResult, modelContent: String): AgentRuntime =
         AgentRuntime(
             analyzer = QueryAnalyzer(),

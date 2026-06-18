@@ -69,7 +69,8 @@ class AgentRuntime(
         val client = deepSeekClient ?: error("deepseek client unavailable")
         val settings = settingsProvider?.invoke() ?: throw DeepSeekClientException("请先配置 DeepSeek")
         val executor = AgentToolExecutor(registry)
-        val tools = registry.definitions()
+        val isCasualChat = isCasualConversation(text)
+        val tools = if (isCasualChat) emptyList() else registry.definitions()
         val loopMessages = mutableListOf<DeepSeekMessage>()
         val toolResults = mutableListOf<AgentToolResult>()
         val seenCalls = LinkedHashSet<String>()
@@ -96,9 +97,10 @@ class AgentRuntime(
                     return answer
                 }
                 if (toolResults.isEmpty()) {
+                    if (isCasualChat) return casualFallbackAnswer()
                     deterministicToolFallback(text, history, registry, toolResults)?.let { return it }
                 }
-                return groundedLoopFallback(text, toolResults)
+                return if (isCasualChat) casualFallbackAnswer() else groundedLoopFallback(text, toolResults)
             }
             // 记录本轮 assistant 的 tool_calls，后续 tool 结果必须按 tool_call_id 对应回去。
             loopMessages += DeepSeekMessage("assistant", response.content, toolCalls = response.toolCalls)
@@ -125,7 +127,7 @@ class AgentRuntime(
                 }
             }
         }
-        return groundedLoopFallback(text, toolResults)
+        return if (isCasualChat && toolResults.isEmpty()) casualFallbackAnswer() else groundedLoopFallback(text, toolResults)
     }
 
     private fun emitBufferedDeltas(deltas: List<String>, answer: String) {
@@ -288,6 +290,23 @@ class AgentRuntime(
 
     private fun deterministicToolCall(text: String): AgentToolCall? =
         AgentToolIntents.deterministicCall(text)
+
+    private fun isCasualConversation(text: String): Boolean {
+        val compact = AgentAliasNormalizer.compact(text)
+        if (compact.isBlank()) return false
+        val dataKeywords = listOf(
+            "船", "飞船", "矿", "蓝图", "任务", "价格", "市场", "挂单", "订单",
+            "库存", "机库", "ccu", "wb", "wbccu", "rsi", "scm", "签到", "服务器",
+        )
+        if (dataKeywords.any { compact.contains(it) }) return false
+        val exact = setOf("你好", "您好", "hello", "hi", "嗨", "在吗", "你在吗")
+        if (compact in exact) return true
+        return listOf("你是谁", "能聊天", "陪我聊", "随便聊", "聊聊天", "你能做什么")
+            .any { compact.contains(AgentAliasNormalizer.compact(it)) }
+    }
+
+    private fun casualFallbackAnswer(): String =
+        "我在，可以聊。也可以帮你查 App 里的船只、市场、蓝图、WB、库存这些资料。你想聊什么？"
 
     private fun String.looksLikePseudoToolCall(): Boolean {
         val value = trim().lowercase()
