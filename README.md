@@ -25,7 +25,7 @@ QQ群：330941212
   </tr>
 </table>
 
-> **当前数据对应游戏版本：Alpha 4.8.1**
+> **当前数据对应游戏版本：Alpha 4.8.2**
 
 ---
 
@@ -37,16 +37,16 @@ QQ群：330941212
 |---|---|---|---|
 | **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
 | **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exec.xyxyll.com），支持按下次开门时间提前 N 分钟一键添加系统闹钟 |
-| **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价 / 购买链接 |
-| **工具** | MobiGuide(AI助手) | BETA | Tool Calling Agent Loop，按问题自主调用本地资料、SCM 市场/物品/蓝图、行政机库、每日 WB、互联网搜索等工具 |
+| **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价；卡片直达 Ship Upgrades，详情入口可查看商品页 |
+| **工具** | MobiGuide(AI助手) | BETA | DeepSeek Tool Calling Agent Loop，按问题自主调用本地资料、SCM 市场/订单/签到、RSI 库存/状态、行政机库、每日 WB 等工具 |
 | **资讯** | 资讯 | ONLINE | citizenwiki 新闻接口直连，资讯列表 + 关键词搜索，点击跳转原文 |
-| **查询** | SCM 市场 | MARKET | flowcld SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
+| **查询** | SCM 市场 | MARKET | flowcld SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、品质、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
-| **查询** | 任务搜索 | 4.8.1 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
+| **查询** | 任务搜索 | 4.8.2 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
 | **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算；支持中文名/英文名/ship id 直接搜索 |
 | **查询** | 维克洛兑换 | 4.8.0 | 巴努交易清单、兑换材料反查、声望需求 |
 | **查询** | 矿物查询 | 4.7.0 | 矿石分布、出现概率、稀有度、含量范围 |
-| **个人信息** | 库存查看 | ONLINE | RSI 账号登录后拉取飞船/装备库存 |
+| **个人信息** | RSI 机库库存 | ONLINE | RSI 账号登录后拉取飞船/装备库存，自动识别 CCU、WB、整船/包、皮肤和价格信息 |
 | **个人信息** | 角色修复 | RSI | 跳转 RSI 账号重置页执行 CHARACTER REPAIR |
 | **个人信息** | 检查更新 | GITHUB | 检查 GitHub Releases 最新版本并跳转下载 APK |
 
@@ -74,13 +74,15 @@ app/src/main/
 │   │   ├── BugData.kt           # 本地 BUG 条目（硬编码）
 │   │   └── BugRepository.kt     # BUG 列表加载与筛选
 │   ├── agent/
-│   │   ├── AgentRuntime.kt      # MobiGuide Agent Loop
+│   │   ├── AgentRuntime.kt      # MobiGuide Agent Loop（DeepSeek tool_calls + streaming）
 │   │   ├── AgentHermesModels.kt # AgentTool / ToolRegistry / ToolExecutor 模型
-│   │   ├── AgentPromptBuilder.kt # DeepSeek 严格 JSON 工具调用 Prompt
-│   │   ├── AgentToolCallParser.kt # tool_call / final_answer JSON 解析
+│   │   ├── DeepSeekClient.kt    # DeepSeek Chat Completions / streaming / tool_calls 客户端
+│   │   ├── AgentPromptBuilder.kt # DeepSeek 系统提示与历史/工具证据上下文
+│   │   ├── AgentToolIntents.kt  # 工具意图提示与确定性兜底映射
+│   │   ├── AgentResultFormatter.kt # 工具结果 fallback 摘要格式化
 │   │   ├── LocalAgentDataProvider.kt # 本地飞船/矿物/蓝图/任务/维克洛资料
-│   │   ├── ScmAgentTools.kt     # SCM 远程物品/市场/蓝图工具
-│   │   └── AppUtilityTools.kt   # 行政机库、每日 WB、应用能力、互联网搜索等工具
+│   │   ├── ScmAgentTools.kt     # SCM 物品/市场/蓝图/我的订单/交易/签到工具
+│   │   └── AppUtilityTools.kt   # 行政机库、每日 WB、RSI 库存/状态、应用能力工具
 │   ├── blueprint/
 │   │   ├── ScCraftBlueprint.kt  # 蓝图数据模型
 │   │   ├── BlueprintCalculator.kt # 品质/材料计算
@@ -121,39 +123,39 @@ app/src/main/
 
 ## MobiGuide(AI助手)
 
-MobiGuide 是应用内的星际公民资料与 SCM 交易助手。当前版本已从“规则式 Planner + DeepSeek 总结”改为标准 **Tool Calling Agent Loop**：
+MobiGuide 是应用内的星际公民资料与 SCM 交易助手。当前版本使用 DeepSeek Chat Completions 的 **Tool Calling Agent Loop**：
 
-1. App 将可用工具名称、描述、参数 JSON Schema 写入 Prompt。
-2. DeepSeek 每轮只能输出一个严格 JSON 对象：
-   - `{"type":"tool_call","tool":"工具名","arguments":{...}}`
-   - `{"type":"final_answer","answer":"中文回答"}`
-3. App 解析 `tool_call`，通过 `AgentToolRegistry` 找到对应工具并执行。
-4. 工具结果以 `tool_result` 加回上下文，再进入下一轮模型推理。
-5. 直到模型输出 `final_answer`，或达到最大步数。
+1. App 将工具名称、描述和参数 JSON Schema 作为 `tools` 传给 DeepSeek。
+2. DeepSeek 返回自然语言回答或 `tool_calls`；App 按 `tool_call_id` 执行并回灌工具结果。
+3. 工具证据会写入对话历史摘要，后续追问可以复用最近一次结构化结果。
+4. 回答支持流式增量显示，用户可中途停止本轮请求。
+5. 达到最大工具步数、重复调用或模型未调用工具时，会进入确定性兜底 / 证据摘要 fallback。
 
 ### 已接入工具
 
 | 工具 | 能力 |
 |---|---|
-| `search_ship` | 本地飞船资料查询，支持中文名、英文名、ship id |
-| `search_mining` | 本地矿物资料查询 |
-| `search_blueprint` | 本地蓝图资料查询 |
-| `search_mission` | 本地任务资料查询 |
-| `search_wikelo` | 本地维克洛兑换资料查询 |
+| `search_local_index` | 本地飞船、矿物、蓝图、任务、维克洛等资料检索 |
 | `search_market` | SCM 市场出售/求购挂单查询 |
 | `search_scm_item` | SCM 物品搜索 |
 | `search_scm_blueprint` | SCM 蓝图搜索 |
 | `draft_scm_order` | 创建 SCM 订单草稿 |
-| `search_hangar_status` | 行政机库状态查询（查询前同步） |
-| `search_daily_wb` | 每日 WB 查询（查询前同步） |
-| `search_web` | 星民相关互联网信息搜索补充 |
+| `list_my_orders` | 查询当前登录用户自己的 SCM 挂单 |
+| `manage_my_order` | 编辑、上架、下架、删除或补数量自己的 SCM 挂单 |
+| `list_my_market_activity` | 汇总我的挂单和交易记录 |
+| `scm_sign_in` | 查询签到状态或执行 SCM 签到 |
+| `get_hangar_timer` | 行政机库状态查询（查询前同步） |
+| `get_daily_wb` | 每日 WB 查询（查询前同步） |
+| `get_rsi_inventory` | 读取本地 RSI 机库库存缓存，支持 CCU/WB/皮肤/整船过滤 |
+| `get_rsi_server_status` | 查询 RSI 平台、PU、Arena Commander 状态 |
 | `list_app_capabilities` | 查询应用当前可用功能 |
 
 ### 安全限制
 
 - 模型不能直接提交订单，只能创建订单草稿；真正提交必须用户点击确认。
-- 模型不能伪造工具结果；资料不足时应说明限制，必要时建议用户同意联网搜索。
-- 模型输出不是合法 JSON、工具不存在或参数校验失败时，会进入 fallback 流程。
+- 模型不能伪造工具结果；资料不足时应说明限制，不能用未提供的数据补全结论。
+- 删除 SCM 挂单必须带明确确认；缺订单编号时只追问或先列出我的订单。
+- 工具不存在、参数异常、重复调用或模型未调用工具时，会进入 fallback 流程。
 
 ---
 
@@ -199,7 +201,7 @@ MobiGuide 可以根据自然语言判断是否需要查询市场或创建订单�
 
 | 文件 | 来源 | 内容 |
 |---|---|---|
-| `uex_shipfit_dataset.json` | UEX API | 全部载具列表（278 辆）、可装配组件列表（627 条） |
+| `uex_shipfit_dataset.json` | UEX API | 全部载具列表（279 辆）、可装配组件列表（716 条） |
 | `erkul_ship_slots_live.json` | Erkul API | 每艘飞船的槽位配置（类型/尺寸限制） |
 | `zh_aliases.json` | 手工维护 | 组件/飞船中文名对照表 |
 | `component_power.json` | SC Wiki API（批量抓取） | 368 个组件的真实电量值 |
@@ -288,7 +290,7 @@ python3 tools/export_location_translations.py
 3. 发电机取 `power_plant.power_segment_generation`；其他组件取 `resource_network.usage.power.maximum`
 4. 输出 `{uex_id: {type, value}}` 写入 `component_power.json`
 
-> 当前覆盖：发电机 74 · 量子驱动 56 · 护盾 62 · 冷却器 68 · 武器 128，共 388 条；雷达无 UUID，按尺寸公式兜底。
+> 当前覆盖：发电机 75 · 量子驱动 57 · 护盾 64 · 冷却器 72 · 武器 137 · 点防御 1 · 炮塔 1，共 407 条；雷达无 UUID，按尺寸公式兜底。
 
 ### 维克洛兑换
 
@@ -303,6 +305,8 @@ python3 tools/export_location_translations.py
 - 列表展示船名、缩略图、WB 优惠价、原价和官网购买链接
 
 当前 app 端使用 `WbRemoteClient` 直接匿名抓取 RSI 官网链路；仓库中保留 `tools/export_daily_wb.py` 作为本机手动导出快照脚本。
+
+WB 列表中的主点击入口固定为 RSI `Ship Upgrades` 页面，符合 WBCCU 实际购买流程；单船商品页仅作为详情外链保留。
 
 ---
 
