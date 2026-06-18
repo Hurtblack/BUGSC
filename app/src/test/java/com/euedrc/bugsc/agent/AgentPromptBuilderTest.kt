@@ -27,6 +27,8 @@ class AgentPromptBuilderTest {
         val text = messages.joinToString("\n") { it.content }
 
         assertTrue(text.contains(profile.displayName))
+        assertTrue(text.contains("人设"))
+        assertTrue(text.contains("自然"))
         assertTrue(text.contains("Quantanium"))
         assertTrue(text.contains("Lyria"))
         assertFalse(text.contains("mining assets"))
@@ -77,21 +79,28 @@ class AgentPromptBuilderTest {
         val messages = builder.buildToolCalling(
             userText = "帮我查一下科粒晶有没有人卖",
             history = emptyList(),
-            tools = listOf(
-                AgentToolDefinition(
-                    name = "search_market",
-                    description = "SCM 市场订单查询",
-                    parameters = listOf(AgentToolParameter("query", "关键词")),
-                ),
-            ),
             loopMessages = emptyList(),
         )
         val text = messages.joinToString("\n") { it.content }
 
         assertTrue(text.contains("search_market"))
         assertTrue(text.contains("市场"))
-        assertTrue(text.contains("final_answer"))
+        assertTrue(text.contains("直接告诉用户市场暂无"))
         assertTrue(text.contains("不要继续调用 search_scm_item、search_local_index、search_mining"))
+    }
+
+    @Test
+    fun toolCallingPromptAllowsNaturalConversationWithoutTools() {
+        val messages = builder.buildToolCalling(
+            userText = "你是谁，能陪我聊聊吗",
+            history = emptyList(),
+            loopMessages = emptyList(),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("先判断"))
+        assertTrue(text.contains("能直接回答的闲聊"))
+        assertTrue(text.contains("不要为了显得会查而调用工具"))
     }
 
     @Test
@@ -99,16 +108,6 @@ class AgentPromptBuilderTest {
         val messages = builder.buildToolCalling(
             userText = "市场最近有什么货",
             history = emptyList(),
-            tools = listOf(
-                AgentToolDefinition(
-                    name = "search_market",
-                    description = "SCM 市场订单查询",
-                    parameters = listOf(
-                        AgentToolParameter("query", "可选关键词", required = false),
-                        AgentToolParameter("side", "方向", required = false),
-                    ),
-                ),
-            ),
             loopMessages = emptyList(),
         )
         val text = messages.joinToString("\n") { it.content }
@@ -125,13 +124,6 @@ class AgentPromptBuilderTest {
         val messages = builder.buildToolCalling(
             userText = "谁卖啊",
             history = emptyList(),
-            tools = listOf(
-                AgentToolDefinition(
-                    name = "search_market",
-                    description = "SCM 市场订单查询",
-                    parameters = listOf(AgentToolParameter("query", "关键词", required = false)),
-                ),
-            ),
             loopMessages = emptyList(),
         )
         val text = messages.joinToString("\n") { it.content }
@@ -147,22 +139,49 @@ class AgentPromptBuilderTest {
         val messages = builder.buildToolCalling(
             userText = "Perseus wiki",
             history = emptyList(),
-            tools = listOf(
-                AgentToolDefinition(
-                    name = "search_ship",
-                    description = "飞船资料查询",
-                    parameters = listOf(AgentToolParameter("query", "关键词")),
-                ),
-            ),
             loopMessages = listOf(
-                DeepSeekMessage("assistant", """{"type":"tool_call","tool":"search_ship","arguments":{"query":"Perseus"}}"""),
-                DeepSeekMessage("system", """{"type":"tool_result","tool":"search_ship","summary":"英仙座 / Perseus"}"""),
+                DeepSeekMessage(
+                    "assistant",
+                    "",
+                    toolCalls = listOf(DeepSeekToolCall("call_1", "search_ship", """{"query":"Perseus"}""")),
+                ),
+                DeepSeekMessage("tool", """{"type":"tool_result","tool":"search_ship","summary":"英仙座 / Perseus"}""", toolCallId = "call_1"),
             ),
         )
         val text = messages.joinToString("\n") { it.content }
 
-        assertTrue(text.contains("收到有效 tool_result 后"))
-        assertTrue(text.contains("不要重复调用同一个工具和同一组参数"))
+        assertTrue(text.contains("收到工具结果后"))
+        assertTrue(text.contains("不要用相同参数重复调用同一个工具"))
+    }
+
+    @Test
+    fun toolCallingPromptIncludesRecentToolEvidenceFromHistory() {
+        val messages = builder.buildToolCalling(
+            userText = "谁卖啊",
+            history = listOf(
+                AgentMessage(
+                    id = "1",
+                    role = AgentMessageRole.USER,
+                    content = "科粒晶有人卖吗",
+                    createdAt = 1L,
+                    status = AgentMessageStatus.SENT,
+                ),
+                AgentMessage(
+                    id = "2",
+                    role = AgentMessageRole.ASSISTANT,
+                    content = "科粒晶有 2 个卖家在售。",
+                    createdAt = 2L,
+                    status = AgentMessageStatus.SENT,
+                    toolSummary = "search_market 摘要:科粒晶 在售 | 卖家:Alice；价格:120",
+                ),
+            ),
+            loopMessages = emptyList(),
+        )
+        val text = messages.joinToString("\n") { it.content }
+
+        assertTrue(text.contains("最近一次工具证据"))
+        assertTrue(text.contains("search_market 摘要:科粒晶 在售"))
+        assertTrue(text.contains("Alice"))
     }
 
     @Test

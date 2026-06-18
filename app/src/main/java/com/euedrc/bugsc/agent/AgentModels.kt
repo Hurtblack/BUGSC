@@ -5,6 +5,7 @@ data class AgentProfile(
     val codename: String,
     val tagline: String,
     val roleDescription: String,
+    val persona: List<String>,
     val capabilities: List<String>,
     val dataSources: List<String>,
     val privacyNotes: List<String>,

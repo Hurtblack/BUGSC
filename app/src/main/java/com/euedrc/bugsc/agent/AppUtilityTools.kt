@@ -3,7 +3,16 @@ package com.euedrc.bugsc.agent
 import android.content.Context
 import com.euedrc.bugsc.HangarTimerEngine
 import com.euedrc.bugsc.HangarTimerSyncSources
+import com.euedrc.bugsc.InventoryCacheCodec
+import com.euedrc.bugsc.InventoryDisplay
+import com.euedrc.bugsc.InventoryDisplayFormatter
+import com.euedrc.bugsc.InventoryItem
+import com.euedrc.bugsc.RsiStatusCache
+import com.euedrc.bugsc.RsiStatusClient
+import com.euedrc.bugsc.ServiceStatusLevel
+import com.euedrc.bugsc.ToolHeaderStatus
 import com.euedrc.bugsc.wb.WbRepository
+import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -44,18 +53,44 @@ interface SyncableHangarTimerSnapshotProvider : HangarTimerSnapshotProvider {
     fun sync(): AppToolSyncResult
 }
 
+interface RsiInventoryProvider {
+    fun lastSync(): String?
+    fun loadItems(): List<InventoryItem>
+    fun shipAliases(): Map<String, String>
+}
+
+data class RsiServerStatusSnapshot(
+    val status: ToolHeaderStatus,
+    val updatedAt: Long,
+    val source: String,
+)
+
+interface RsiServerStatusProvider {
+    fun snapshot(): RsiServerStatusSnapshot
+}
+
+interface SyncableRsiServerStatusProvider : RsiServerStatusProvider {
+    fun sync(): AppToolSyncResult
+}
+
 object AppUtilityTools {
     fun create(context: Context): List<AgentTool> = create(
         dailyWbProvider = AndroidDailyWbProvider(context.applicationContext),
         hangarTimerProvider = AndroidHangarTimerSnapshotProvider(context.applicationContext),
+        rsiInventoryProvider = AndroidRsiInventoryProvider(context.applicationContext),
+        rsiServerStatusProvider = AndroidRsiServerStatusProvider(context.applicationContext),
     )
 
     fun create(
         dailyWbProvider: DailyWbProvider,
         hangarTimerProvider: HangarTimerSnapshotProvider,
+        rsiInventoryProvider: RsiInventoryProvider = EmptyRsiInventoryProvider,
+        rsiServerStatusProvider: RsiServerStatusProvider = DefaultRsiServerStatusProvider,
     ): List<AgentTool> = listOf(
         DailyWbTool(dailyWbProvider),
         HangarTimerTool(hangarTimerProvider),
+        RsiInventoryTool(rsiInventoryProvider),
+        RsiServerStatusTool(rsiServerStatusProvider),
         AppCapabilitiesTool(),
     )
 }
@@ -163,6 +198,173 @@ class HangarTimerTool(
             sources = listOf(AgentSource("行政机库计时器", "local", snapshot.anchorAtSeconds.toString())),
             confidence = if (syncResult?.success == false) 0.55f else 0.76f,
         )
+    }
+}
+
+class RsiInventoryTool(
+    private val provider: RsiInventoryProvider,
+) : AgentTool {
+    override val name: String = "get_rsi_inventory"
+    override val description: String =
+        "读取 App 本地缓存的 RSI 机库库存，返回 CCU/WB/标准/皮肤/整船/包、价格、保险和页码；不会重新登录或上传 token"
+    override val parameters: List<AgentToolParameter> = listOf(
+        AgentToolParameter("query", "可选：库存关键词，中英文均可，例如 瑞伦、Railen、WB、CCU、陆龟", required = false),
+        AgentToolParameter("type", "可选：all、ccu、ship、package、paint、item，默认 all", required = false),
+        AgentToolParameter("limit", "可选：最多返回条数，默认 12，最大 30", required = false),
+    )
+
+    override suspend fun run(call: AgentToolCall): AgentToolResult {
+        val query = call.args["query"].orEmpty().trim()
+        val type = call.args["type"].orEmpty().ifBlank { "all" }.lowercase(Locale.US)
+        val limit = call.args["limit"].orEmpty().toIntOrNull()?.coerceIn(1, 30) ?: 12
+        val aliases = provider.shipAliases()
+        val allItems = provider.loadItems()
+        if (allItems.isEmpty()) {
+            return AgentToolResult(
+                call = call,
+                summary = "RSI 机库库存暂无本地缓存。请先进入“RSI 机库库存”页面登录并刷新库存。",
+                facts = emptyList(),
+                sources = listOf(AgentSource("RSI 机库库存缓存", "local")),
+                confidence = 0f,
+            )
+        }
+        val prepared = allItems.map { item -> item to InventoryDisplayFormatter.format(item, aliases) }
+        val filtered = prepared
+            .filter { (_, display) -> type == "all" || display.matchesType(type) }
+            .filter { (item, display) -> query.isBlank() || item.matchesQuery(display, query) }
+        val visible = filtered.take(limit)
+        val lastSync = provider.lastSync().orEmpty()
+        if (visible.isEmpty()) {
+            return AgentToolResult(
+                call = call,
+                summary = buildString {
+                    append("RSI 机库库存未命中")
+                    if (query.isNotBlank()) append("：").append(query)
+                    append("。本地缓存共 ${allItems.size} 项")
+                    if (lastSync.isNotBlank()) append("，最近同步：").append(lastSync)
+                },
+                facts = listOf(
+                    AgentFact("库存总数", allItems.size.toString()),
+                    AgentFact("最近同步", lastSync.ifBlank { "未知" }),
+                ),
+                sources = listOf(AgentSource("RSI 机库库存缓存", "local", lastSync)),
+                confidence = 0.35f,
+            )
+        }
+        return AgentToolResult(
+            call = call,
+            summary = buildString {
+                appendLine("RSI 机库库存：共 ${allItems.size} 项，命中 ${filtered.size} 项")
+                if (lastSync.isNotBlank()) appendLine("最近同步：$lastSync")
+                visible.forEach { (_, display) -> appendLine(display.summaryLine()) }
+                if (filtered.size > visible.size) appendLine("还有 ${filtered.size - visible.size} 项未显示，可缩小 query 或提高 limit。")
+            }.trim(),
+            facts = buildList {
+                add(AgentFact("库存总数", allItems.size.toString()))
+                if (lastSync.isNotBlank()) add(AgentFact("最近同步", lastSync))
+                visible.forEach { (_, display) ->
+                    add(AgentFact("库存", display.summaryLine()))
+                    if (display.tags.contains("CCU")) add(AgentFact("CCU", display.title))
+                    if (display.tags.contains("WB")) add(AgentFact("WB", display.title))
+                }
+            },
+            sources = listOf(AgentSource("RSI 机库库存缓存", "local", lastSync)),
+            confidence = 0.72f,
+        )
+    }
+
+    private fun InventoryDisplay.matchesType(type: String): Boolean = when (type) {
+        "ccu" -> tags.contains("CCU")
+        "ship" -> tags.contains("整船/包")
+        "package", "pack" -> tags.contains("包")
+        "paint", "skin" -> tags.contains("皮肤")
+        "item" -> tags.contains("物品")
+        "wb", "warbond" -> tags.contains("WB")
+        else -> true
+    }
+
+    private fun InventoryItem.matchesQuery(display: com.euedrc.bugsc.InventoryDisplay, query: String): Boolean {
+        val compactQuery = AgentAliasNormalizer.compact(query)
+        val lowerQuery = query.lowercase(Locale.US)
+        return buildList {
+            add(name)
+            add(contains)
+            add(display.title)
+            add(display.subtitle)
+            add(display.detail)
+            add(display.tags.joinToString(" "))
+        }.any { value ->
+            val compactValue = AgentAliasNormalizer.compact(value)
+            compactValue.contains(compactQuery) ||
+                compactQuery.contains(compactValue) ||
+                value.lowercase(Locale.US).contains(lowerQuery)
+        }
+    }
+
+    private fun com.euedrc.bugsc.InventoryDisplay.summaryLine(): String {
+        val subtitleText = subtitle.takeIf { it.isNotBlank() }?.let { "（$it）" }.orEmpty()
+        val tagsText = tags.joinToString(" / ")
+        return "- $title$subtitleText：$tagsText${detail.takeIf { it.isNotBlank() }?.let { "；$it" }.orEmpty()}"
+    }
+}
+
+class RsiServerStatusTool(
+    private val provider: RsiServerStatusProvider,
+) : AgentTool {
+    override val name: String = "get_rsi_server_status"
+    override val description: String =
+        "查询 RSI / 星际公民服务器状态，返回 Platform、Persistent Universe 和 Arena Commander 当前状态"
+    override val parameters: List<AgentToolParameter> = listOf(
+        AgentToolParameter("service", "可选：platform、pu、arena；为空返回全部", required = false),
+    )
+
+    override suspend fun run(call: AgentToolCall): AgentToolResult {
+        val syncResult = (provider as? SyncableRsiServerStatusProvider)?.sync()
+        val snapshot = provider.snapshot()
+        val service = call.args["service"].orEmpty().trim().lowercase(Locale.US)
+        val rows = snapshot.status.rows().filter { (key, _) ->
+            service.isBlank() || key == service || service == "all"
+        }.ifEmpty { snapshot.status.rows() }
+        val updatedAt = formatMillis(snapshot.updatedAt)
+        return AgentToolResult(
+            call = call,
+            summary = buildString {
+                syncResult?.let { appendLine(it.message) }
+                appendLine("RSI 服务器状态：")
+                rows.forEach { (_, row) -> appendLine("${row.name}：${row.level.label()}") }
+                if (updatedAt.isNotBlank()) appendLine("更新于：$updatedAt")
+                append("来源：${snapshot.source}")
+            }.trim(),
+            facts = buildList {
+                syncResult?.let { add(AgentFact("同步状态", it.message)) }
+                rows.forEach { (_, row) -> add(AgentFact(row.name, row.level.label())) }
+                if (updatedAt.isNotBlank()) add(AgentFact("更新于", updatedAt))
+                add(AgentFact("来源", snapshot.source))
+            },
+            sources = listOf(AgentSource("RSI Status Page", "https://status.robertsspaceindustries.com/", updatedAt)),
+            confidence = when {
+                syncResult?.success == true -> 0.78f
+                syncResult?.success == false -> 0.52f
+                snapshot.source == "default" -> 0.45f
+                else -> 0.68f
+            },
+        )
+    }
+
+    private data class StatusRow(val name: String, val level: ServiceStatusLevel)
+
+    private fun ToolHeaderStatus.rows(): List<Pair<String, StatusRow>> = listOf(
+        "platform" to StatusRow("Platform", platform),
+        "pu" to StatusRow("Persistent Universe", persistentUniverse),
+        "persistentuniverse" to StatusRow("Persistent Universe", persistentUniverse),
+        "arena" to StatusRow("Arena Commander", arenaCommander),
+        "arenacommander" to StatusRow("Arena Commander", arenaCommander),
+    ).distinctBy { it.second.name }
+
+    private fun ServiceStatusLevel.label(): String = when (this) {
+        ServiceStatusLevel.OPERATIONAL -> "正常"
+        ServiceStatusLevel.DEGRADED -> "降级"
+        ServiceStatusLevel.OUTAGE -> "停机"
     }
 }
 
@@ -304,6 +506,68 @@ private class AndroidHangarTimerSnapshotProvider(
     private fun nowSeconds(): Long = System.currentTimeMillis() / 1000L
 }
 
+private class AndroidRsiInventoryProvider(
+    private val context: Context,
+) : RsiInventoryProvider {
+    private val prefs by lazy { context.getSharedPreferences(INVENTORY_PREFS, Context.MODE_PRIVATE) }
+
+    override fun lastSync(): String? = prefs.getString(KEY_LAST_SYNC, "")?.takeIf { it.isNotBlank() }
+
+    override fun loadItems(): List<InventoryItem> =
+        InventoryCacheCodec.decodeItems(prefs.getString(KEY_ITEMS_CACHE, "") ?: "")
+
+    override fun shipAliases(): Map<String, String> = runCatching {
+        val root = context.assets.open("shipfit/zh_aliases.json")
+            .bufferedReader().use { it.readText() }
+            .let { JSONObject(it) }
+        val ships = root.optJSONObject("ships") ?: return@runCatching emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (key in ships.keys()) {
+            val value = ships.optString(key)
+            if (key.isNotBlank() && value.isNotBlank()) out[key] = value
+        }
+        out
+    }.getOrDefault(emptyMap())
+}
+
+private class AndroidRsiServerStatusProvider(
+    context: Context,
+) : SyncableRsiServerStatusProvider {
+    private val cache = RsiStatusCache(context)
+    private val client = RsiStatusClient()
+    private var latest: RsiServerStatusSnapshot? = cache.load()?.let { cached ->
+        RsiServerStatusSnapshot(cached.status, cached.updatedAt, "cache")
+    }
+
+    override fun sync(): AppToolSyncResult =
+        runCatching {
+            val status = client.fetchStatus()
+            val updatedAt = System.currentTimeMillis()
+            cache.save(status, updatedAt)
+            latest = RsiServerStatusSnapshot(status, updatedAt, "remote")
+            AppToolSyncResult(success = true, message = "已同步 RSI 状态")
+        }.getOrElse { error ->
+            AppToolSyncResult(
+                success = false,
+                message = "RSI 状态同步失败，使用本地缓存：${error.message ?: error::class.java.simpleName}",
+            )
+        }
+
+    override fun snapshot(): RsiServerStatusSnapshot =
+        latest ?: DefaultRsiServerStatusProvider.snapshot()
+}
+
+private object EmptyRsiInventoryProvider : RsiInventoryProvider {
+    override fun lastSync(): String? = null
+    override fun loadItems(): List<InventoryItem> = emptyList()
+    override fun shipAliases(): Map<String, String> = emptyMap()
+}
+
+private object DefaultRsiServerStatusProvider : RsiServerStatusProvider {
+    override fun snapshot(): RsiServerStatusSnapshot =
+        RsiServerStatusSnapshot(ToolHeaderStatus(), updatedAt = 0L, source = "default")
+}
+
 private data class AppCapability(
     val name: String,
     val tool: String,
@@ -318,17 +582,22 @@ private val APP_CAPABILITIES = listOf(
     AppCapability("任务资料", "search_mission", "查询任务、奖励、阵营和蓝图来源", "只读"),
     AppCapability("维科洛兑换", "search_wikelo", "查询 Wikelo 兑换材料和奖励", "只读"),
     AppCapability("SCM 市场", "search_market", "查询出售/求购挂单和价格", "只读"),
+    AppCapability("SCM 我的挂单", "list_my_orders", "查询当前登录用户自己的出售/求购挂单", "登录后只读"),
+    AppCapability("SCM 我的交易", "list_my_market_activity", "查询我的挂单和我买入/卖出的交易记录", "登录后只读"),
     AppCapability("SCM 物品", "search_scm_item", "查询 SCM 物品和物品 ID", "只读"),
     AppCapability("SCM 订单草稿", "draft_scm_order", "整理出售/求购订单草稿，提交必须用户确认", "需确认"),
+    AppCapability("SCM 签到", "scm_sign_in", "查询签到状态或执行每日签到", "登录后可执行"),
     AppCapability("每日 WB", "get_daily_wb", "查询 RSI 官网 Warbond 限时折扣船", "只读"),
     AppCapability("行政机库", "get_hangar_timer", "查询行政机库开启/关闭倒计时和下一次开启时间", "只读"),
-    AppCapability("RSI 机库库存", "无直接工具", "App 可在页面中读取用户 RSI 机库，需要登录", "登录后只读"),
+    AppCapability("RSI 机库库存", "get_rsi_inventory", "读取 App 本地缓存的 RSI 机库库存，支持 CCU/WB/皮肤/整船/包过滤", "登录后只读"),
+    AppCapability("RSI 服务器状态", "get_rsi_server_status", "查询 RSI 状态页里的 Platform、PU 和 Arena Commander 状态", "只读"),
     AppCapability("Issue Council", "无直接工具", "App 可打开 Issue Council 页面和提交 Bug 页面", "用户操作"),
     AppCapability("角色修复", "无直接工具", "App 可打开 RSI 角色修复页面，需要 RSI 登录", "用户操作"),
     AppCapability("SCM 聊天/交易", "无直接工具", "App 可查看会话、交易列表和交易详情，需要 SCM 登录", "登录后用户操作"),
 )
 
 private const val HANGAR_PREFS = "hangar_timer"
+private const val INVENTORY_PREFS = "inventory"
 private const val RULE_VERSION = 1
 private const val RED_TO_GREEN_SECONDS = 24L * 60L
 private const val GREEN_TO_GRAY_SECONDS = 12L * 60L
@@ -337,6 +606,8 @@ private val DEFAULT_LIGHTS = listOf("red", "red", "red", "red", "red")
 private const val KEY_LIGHTS = "confirmedLights"
 private const val KEY_CONFIRMED_AT = "confirmedAt"
 private const val KEY_RULE_VERSION = "ruleVersion"
+private const val KEY_ITEMS_CACHE = "inventoryItemsCache"
+private const val KEY_LAST_SYNC = "inventoryLastSync"
 private const val XYXYLL_APP_JS_URL = "https://exec.xyxyll.com/app.js"
 
 private fun formatDuration(totalSeconds: Long): String {
@@ -350,6 +621,9 @@ private fun formatTimestamp(seconds: Long): String {
     if (seconds <= 0L) return "-"
     return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(seconds * 1000L))
 }
+
+private fun formatMillis(millis: Long): String =
+    if (millis <= 0L) "" else SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(millis))
 
 private fun formatMoney(value: Double): String =
     if (value % 1.0 == 0.0) value.toLong().toString() else "%.2f".format(value)

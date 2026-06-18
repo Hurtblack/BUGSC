@@ -140,6 +140,21 @@
             android:textSize="14sp" />
 
         <Button
+            android:id="@+id/btn_agent_stop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/button_outline_accent"
+            android:minWidth="0dp"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="10dp"
+            android:text="@string/agent_stop"
+            android:textAllCaps="false"
+            android:textColor="@color/sc_accent"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <Button
             android:id="@+id/btn_agent_send"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

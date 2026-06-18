@@ -39,4 +39,44 @@ class AgentHistoryStoreTest {
 
         assertTrue(store.load().isEmpty())
     }
+
+    @Test
+    fun saveAndAppendKeepOnlyMostRecentMessages() {
+        val store = AgentHistoryStore(FakeKv(), maxMessages = 3)
+
+        store.save(
+            listOf(
+                AgentMessage("1", AgentMessageRole.USER, "1", 1L, AgentMessageStatus.SENT),
+                AgentMessage("2", AgentMessageRole.ASSISTANT, "2", 2L, AgentMessageStatus.SENT),
+                AgentMessage("3", AgentMessageRole.USER, "3", 3L, AgentMessageStatus.SENT),
+                AgentMessage("4", AgentMessageRole.ASSISTANT, "4", 4L, AgentMessageStatus.SENT),
+            ),
+        )
+        store.append(AgentMessage("5", AgentMessageRole.USER, "5", 5L, AgentMessageStatus.SENT))
+
+        assertEquals(listOf("3", "4", "5"), store.load().map { it.id })
+    }
+
+    @Test
+    fun appendIsSynchronizedSoConcurrentWritersDoNotLoseMessages() {
+        val store = AgentHistoryStore(FakeKv(), maxMessages = 20)
+        val threads = (1..12).map { index ->
+            Thread {
+                store.append(
+                    AgentMessage(
+                        id = index.toString(),
+                        role = AgentMessageRole.USER,
+                        content = "message $index",
+                        createdAt = index.toLong(),
+                        status = AgentMessageStatus.SENT,
+                    ),
+                )
+            }
+        }
+
+        threads.forEach(Thread::start)
+        threads.forEach(Thread::join)
+
+        assertEquals((1..12).map { it.toString() }.sorted(), store.load().map { it.id }.sorted())
+    }
 }

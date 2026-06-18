@@ -27,6 +27,7 @@ import com.euedrc.bugsc.market.transaction.TransactionClient
 import com.euedrc.bugsc.scm.ScmAuthStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +41,7 @@ class AgentChatFragment : Fragment() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var send: Button
+    private lateinit var stop: Button
     private lateinit var runStatus: TextView
     private lateinit var settingsStore: AgentSettingsStore
     private lateinit var historyStore: AgentHistoryStore
@@ -52,6 +54,9 @@ class AgentChatFragment : Fragment() {
     private var runTimer: Job? = null
     private var runStartedAt: Long = 0L
     private var runStatusLabel: String = "思考中"
+    private var inFlightJob: Job? = null
+    private var activeAssistantBubble: TextView? = null
+    private val activeAssistantText = StringBuilder()
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_agent_chat, parent, false)
@@ -64,6 +69,7 @@ class AgentChatFragment : Fragment() {
         scroll = view.findViewById(R.id.scroll_agent_messages)
         input = view.findViewById(R.id.et_agent_input)
         send = view.findViewById(R.id.btn_agent_send)
+        stop = view.findViewById(R.id.btn_agent_stop)
         runStatus = view.findViewById(R.id.tv_agent_run_status)
         view.findViewById<TextView>(R.id.tv_agent_title).text = profile.displayName
         view.findViewById<TextView>(R.id.tv_agent_status).text = getString(R.string.agent_status_deepseek)
@@ -75,6 +81,7 @@ class AgentChatFragment : Fragment() {
             findNavController().navigate(R.id.AgentSettingsFragment)
         }
         send.setOnClickListener { sendMessage() }
+        stop.setOnClickListener { cancelCurrentRun(showStopped = true) }
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
@@ -91,6 +98,15 @@ class AgentChatFragment : Fragment() {
         if (::settingsStore.isInitialized) renderConfigState()
     }
 
+    override fun onDestroyView() {
+        cancelCurrentRun(showStopped = false)
+        runTimer?.cancel()
+        runTimer = null
+        activeAssistantBubble = null
+        inFlightJob = null
+        super.onDestroyView()
+    }
+
     private fun renderConfigState() {
         val configured = settingsStore.settings().isConfigured
         input.hint = if (configured) getString(R.string.agent_input_hint) else getString(R.string.agent_input_config_hint)
@@ -100,7 +116,7 @@ class AgentChatFragment : Fragment() {
         container.removeAllViews()
         val history = historyStore.load()
         if (history.isEmpty()) {
-            addBubble(profile.roleDescription, mine = false)
+            addBubble(AgentProfileProvider.chatGreeting(profile), mine = false)
         } else {
             history.forEach { addBubble(it.content, mine = it.role == AgentMessageRole.USER) }
         }
@@ -108,6 +124,7 @@ class AgentChatFragment : Fragment() {
     }
 
     private fun sendMessage() {
+        if (inFlightJob != null) return
         val text = input.text.toString().trim()
         if (text.isBlank()) return
         val settings = settingsStore.settings()
@@ -122,32 +139,59 @@ class AgentChatFragment : Fragment() {
         historyStore.append(userMsg)
         addBubble(text, mine = true)
         input.setText("")
+        val assistantBubble = addBubble("…", mine = false)
+        activeAssistantBubble = assistantBubble
+        activeAssistantText.clear()
+        setAgentRunning(true)
         startRunStatus()
-        lifecycleScope.launch {
+        val job = lifecycleScope.launch {
             val draftState = ScmOrderDraftToolState(pendingParse = pendingOrderParse)
-            val answer = withContext(Dispatchers.IO) {
-                runCatching {
-                    buildRuntime(
-                        draftState = draftState,
-                    ).answer(text, historyBeforeSend)
+            try {
+                val outcome = withContext(Dispatchers.IO) {
+                    val runtime = buildRuntime(draftState = draftState)
+                    val answer = runtime.answer(text, historyBeforeSend)
+                    answer to runtime.lastToolEvidence
                 }
-                    .getOrElse { it.message ?: getString(R.string.agent_request_failed) }
+                if (!isAdded || requestVersion != conversationVersion) return@launch
+                val (answer, toolEvidence) = outcome
+                updateBubble(assistantBubble, answer)
+                val msg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.ASSISTANT, answer, System.currentTimeMillis(), AgentMessageStatus.SENT, toolSummary = toolEvidence)
+                historyStore.append(msg)
+                pendingOrderParse = draftState.pendingParse
+                draftState.resolved?.let { resolution ->
+                    pendingOrderDraft = resolution
+                    addOrderActions(resolution)
+                }
+                finishRunStatus()
+                scrollToBottom()
+            } catch (error: CancellationException) {
+                if (isAdded && requestVersion == conversationVersion) {
+                    updateBubble(assistantBubble, "已停止。")
+                    finishRunStatus("已停止")
+                }
+            } catch (error: Throwable) {
+                if (isAdded && requestVersion == conversationVersion) {
+                    val message = userFacingError(error)
+                    updateBubble(assistantBubble, message)
+                    val msg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.ASSISTANT, message, System.currentTimeMillis(), AgentMessageStatus.FAILED)
+                    historyStore.append(msg)
+                    finishRunStatus()
+                    scrollToBottom()
+                }
+            } finally {
+                if (inFlightJob === coroutineContext[Job]) {
+                    inFlightJob = null
+                    activeAssistantBubble = null
+                    activeAssistantText.clear()
+                    setAgentRunning(false)
+                }
             }
-            if (!isAdded || requestVersion != conversationVersion) return@launch
-            val msg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.ASSISTANT, answer, System.currentTimeMillis(), AgentMessageStatus.SENT)
-            historyStore.append(msg)
-            addBubble(answer, mine = false)
-            pendingOrderParse = draftState.pendingParse
-            draftState.resolved?.let { resolution ->
-                pendingOrderDraft = resolution
-                addOrderActions(resolution)
-            }
-            finishRunStatus()
-            scrollToBottom()
         }
+        inFlightJob = job
     }
 
     private fun sendOrderDraftMessage(text: String, parsed: ScmOrderDraftParseResult) {
+        if (inFlightJob != null) return
         val requestVersion = conversationVersion
         val userMsg = AgentMessage(UUID.randomUUID().toString(), AgentMessageRole.USER, text, System.currentTimeMillis(), AgentMessageStatus.SENT)
         historyStore.append(userMsg)
@@ -192,6 +236,7 @@ class AgentChatFragment : Fragment() {
 
     private fun startNewChat() {
         conversationVersion += 1L
+        cancelCurrentRun(showStopped = false)
         pendingOrderDraft = null
         pendingOrderParse = null
         historyStore.clear()
@@ -236,6 +281,7 @@ class AgentChatFragment : Fragment() {
         requireActivity().runOnUiThread {
             when (event) {
                 is AgentRuntimeEvent.Thinking -> updateRunStatus("思考中")
+                is AgentRuntimeEvent.AnswerDelta -> appendActiveAssistantDelta(event.delta)
                 is AgentRuntimeEvent.ToolCallStarted -> updateRunStatus("工具：${event.tool}")
                 is AgentRuntimeEvent.ToolCallFinished -> updateRunStatus("工具完成：${event.tool}")
                 is AgentRuntimeEvent.ModelJson -> Unit
@@ -271,11 +317,11 @@ class AgentChatFragment : Fragment() {
         runStatus.text = "$runStatusLabel · ${seconds}s"
     }
 
-    private fun finishRunStatus() {
+    private fun finishRunStatus(prefix: String = "回答用时") {
         runTimer?.cancel()
         runTimer = null
         val seconds = elapsedRunSeconds(minimum = 1L)
-        runStatus.text = "回答用时 ${seconds}s"
+        runStatus.text = "$prefix ${seconds}s"
         runStatus.visibility = View.VISIBLE
         runStatus.postDelayed({
             if (::runStatus.isInitialized && runTimer == null) {
@@ -287,7 +333,7 @@ class AgentChatFragment : Fragment() {
     private fun elapsedRunSeconds(minimum: Long): Long =
         max(minimum, (System.currentTimeMillis() - runStartedAt) / 1000L)
 
-    private fun addBubble(text: String, mine: Boolean) {
+    private fun addBubble(text: String, mine: Boolean): TextView {
         val bubble = TextView(requireContext()).apply {
             textSize = 14f
             setTextColor(if (mine) "#001119".toColorInt() else "#d8eaf2".toColorInt())
@@ -308,6 +354,18 @@ class AgentChatFragment : Fragment() {
             },
         )
         container.addView(row)
+        return bubble
+    }
+
+    private fun updateBubble(bubble: TextView, text: String) {
+        AgentMarkdownFormatter.bind(bubble, text, mine = false)
+        scrollToBottom()
+    }
+
+    private fun appendActiveAssistantDelta(delta: String) {
+        val bubble = activeAssistantBubble ?: return
+        activeAssistantText.append(delta)
+        updateBubble(bubble, activeAssistantText.toString())
     }
 
     private fun appendAssistantMessage(text: String) {
@@ -393,6 +451,24 @@ class AgentChatFragment : Fragment() {
     private fun scrollToBottom() {
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
     }
+
+    private fun setAgentRunning(running: Boolean) {
+        if (::send.isInitialized) send.isEnabled = !running
+        if (::input.isInitialized) input.isEnabled = !running
+        if (::stop.isInitialized) stop.visibility = if (running) View.VISIBLE else View.GONE
+    }
+
+    private fun cancelCurrentRun(showStopped: Boolean) {
+        val job = inFlightJob ?: return
+        if (showStopped) {
+            job.cancel(CancellationException("user stopped agent run"))
+        } else {
+            job.cancel()
+        }
+    }
+
+    private fun userFacingError(error: Throwable): String =
+        if (error is DeepSeekClientException) error.userMessage else getString(R.string.agent_request_failed)
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 }

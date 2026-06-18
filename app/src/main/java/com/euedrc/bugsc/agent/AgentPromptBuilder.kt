@@ -1,7 +1,5 @@
 package com.euedrc.bugsc.agent
 
-import org.json.JSONArray
-
 class AgentPromptBuilder(private val profile: AgentProfile) {
 
     fun build(
@@ -14,21 +12,26 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             appendLine("你是 ${profile.displayName} (${profile.codename})。")
             appendLine(profile.roleDescription)
             appendLine("定位：${profile.tagline}")
+            appendLine("人设：${profile.persona.joinToString("；")}")
             appendLine("能力：${profile.capabilities.joinToString("；")}")
             appendLine("数据源：${profile.dataSources.joinToString("；")}")
             appendLine("隐私：${profile.privacyNotes.joinToString("；")}")
             appendLine("限制：${profile.limitations.joinToString("；")}")
             appendLine("请使用中文回答，优先依据工具结果。工具结果不足时必须说明不确定，不要编造地点、奖励、价格、材料和版本信息。")
-            appendLine("你没有可调用的 search、tool、function 或联网浏览能力；App 已经在调用模型前完成了可用查询。")
+            appendLine("当前回答只能依据本轮已经提供给你的查询证据和工具结果；不要编造未提供的后台查询、登录查询或联网结果。")
             appendLine("不要输出 <search>、<tool>、JSON 工具调用、伪代码查询或“我再查一下”。不能假装正在联网查询、登录查询或后台继续查询。")
             appendLine("面向中文玩家输出：名称优先用中文；有英文名时只作为“中文 / English”的补充。")
-            appendLine("回答要短，只输出用户问题对应的结论和翻译后的关键资料。不要输出工具名、查询过程、未命中列表、数据源说明或无关建议。")
+            appendLine("回答要像自然对话：先回应用户真正想问的事，再给结论和关键资料。不要输出工具名、查询过程、未命中列表、数据源说明或无关建议。")
+            appendLine("回答格式要清晰：不同板块之间留一个空行；列表逐行输出；不要把挂单、交易、价格、地点挤在同一大段里。")
             appendLine("如果命中蓝图，按“### 蓝图”“### 材料”“### 来源”“### 结论”组织；没有内容的板块直接省略。")
             appendLine("每个板块最多 3 条要点；整段回答尽量控制在 10 行以内。")
             appendLine("资料未命中不等于不能回答；可以基于游戏常识给建议，但必须用一句话标注“本地资料未命中，以下是推断”。")
             appendLine("订单类请求只协助整理订单草稿。缺少出售或求购、物品、数量、单价、交易地点时，只追问缺失字段，不要猜测。")
             appendLine("字段齐全时只能提示已生成订单草稿并等待用户点击确认；真正创建订单必须由 App 在用户点击确认后执行。")
             appendLine("不要声称订单已创建、已发布、已挂单，除非 App 明确返回创建成功结果。")
+            appendLine("WBCCU 规则：CCU 是船只升级券，只能从低价值船升到高价值船；WB/Warbond 通常是现金优惠，不等同于可用商店点数。")
+            appendLine("当用户要求 RSI 机库、WBCCU、CCU 链路或升级路线规划时，必须优先依据 get_rsi_inventory 的库存证据；需要当前 WB 价格时再依据 get_daily_wb。")
+            appendLine("规划 WBCCU 时必须分开说明：新增现金、有效总成本、当前可完成性、会消耗哪些已有券、哪些节点需买/需等/未确认。不要把已有券成本误算成新增现金。")
         }
         val messages = mutableListOf(DeepSeekMessage("system", sanitize(system)))
         history.takeLast(MAX_HISTORY).forEach { msg ->
@@ -39,6 +42,7 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             }
             messages += DeepSeekMessage(role, sanitize(msg.content))
         }
+        recentToolEvidence(history)?.let { messages += DeepSeekMessage("system", sanitize(it)) }
         messages += DeepSeekMessage("user", sanitize(userText))
         if (toolResults.isNotEmpty()) {
             messages += DeepSeekMessage("system", sanitize(formatToolResults(toolResults)))
@@ -52,40 +56,34 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
     fun buildToolCalling(
         userText: String,
         history: List<AgentMessage>,
-        tools: List<AgentToolDefinition>,
         loopMessages: List<DeepSeekMessage>,
     ): List<DeepSeekMessage> {
         val system = buildString {
-            appendLine("你是 MobiGuide，一个 Star Citizen 资料、SCM 交易和 SCMobiGlas App 能力助手。")
+            appendLine("你是 ${profile.displayName} (${profile.codename})。")
+            appendLine(profile.roleDescription)
+            appendLine("人设：${profile.persona.joinToString("；")}")
             appendLine("你不能编造工具结果。")
-            appendLine("如果需要查询资料，必须调用工具。")
-            appendLine("你每次只能输出一个 JSON 对象，不能输出 Markdown，不能输出解释文字。")
-            appendLine()
-            appendLine("你有两种输出类型：")
-            appendLine("""{"type":"tool_call","tool":"工具名称","arguments":{}}""")
-            appendLine("""{"type":"final_answer","answer":"中文回答"}""")
+            appendLine("你要先判断用户是在闲聊、问能力、表达偏好，还是需要 App 数据。能直接回答的闲聊、解释和追问就直接回答；需要实时资料、账号数据、订单、交易、签到、市场价格或本地资料证据时，再调用最合适的工具。")
+            appendLine("不要为了显得会查而调用工具；也不要在需要工具证据的问题上凭空回答。")
             appendLine()
             appendLine("重要规则：")
-            appendLine("- 不允许输出“我去查一下”“稍等我查询”这种自然语言。")
-            appendLine("- 不允许伪造工具结果。")
-            appendLine("- 不允许调用不存在的工具。")
-            appendLine("- 遇到出售、求购、挂单、创建订单、发布订单等请求时，必须调用 draft_scm_order 生成订单草稿。")
+            appendLine("- 工具是你的能力，不是固定脚本；先理解用户意图，再选择是否调用。")
+            appendLine("- 遇到出售、求购、挂单、创建订单、发布订单等请求时，调用 draft_scm_order 生成订单草稿。")
+            appendLine("- 遇到修改、编辑、上架、下架、删除、补数量等“我的订单/我的挂单”管理请求时，调用 manage_my_order；缺订单编号时先查询并追问订单编号。")
             appendLine("- 订单请求里的“品质850”“质量 900”不是物品名的一部分，调用 draft_scm_order 时必须拆成 quality 参数。")
-            appendLine("- 用户询问“我要买/现在多少钱/哪里买”时，调用 search_market 且 side=sell，查询当前出售挂单。")
-            appendLine("- 用户询问“我要卖/能卖多少钱/有人收吗”时，调用 search_market 且 side=buy，查询当前求购挂单。")
+            AgentToolIntents.promptHints.forEach { appendLine("- $it") }
+            appendLine("- 回答市场挂单结果时必须保留工具结果里的卖家/买家数量、卖家/买家昵称、各自价格、数量和地点；不要只说哪里有卖。")
             appendLine("- 市场列表意图：用户没有指定具体物品，只是在问当前 SCM 市场有哪些订单、有什么货、有什么卖单、在售列表、卖家挂了什么等出售列表时，调用 search_market，arguments 必须包含 query=\"\" 和 side=\"sell\"。")
             appendLine("- 市场列表意图：用户没有指定具体物品，只是在问当前 SCM 市场有哪些收单、求购列表、有人收什么、买家要什么等求购列表时，调用 search_market，arguments 必须包含 query=\"\" 和 side=\"buy\"。")
             appendLine("- 市场追问意图：用户在市场查询后追问“谁卖”“谁收”“卖家是谁”“在哪交易”“哪个订单”等卖家、买家、地点或订单详情时，先从最近一条市场工具结果/历史回答中回答；如果历史里缺少该字段，必须复用最近的市场关键词调用 search_market 补查。")
-            appendLine("- 市场问题以 search_market 结果为准；如果 search_market 未命中，就输出 final_answer 说明市场暂无对应出售/求购挂单，不要继续调用 search_scm_item、search_local_index、search_mining 等不相关工具。")
+            appendLine("- 市场问题以 search_market 结果为准；如果 search_market 未命中，就直接告诉用户市场暂无对应出售/求购挂单，不要继续调用 search_scm_item、search_local_index、search_mining 等不相关工具。")
             appendLine("- 不允许直接创建订单，只能创建订单草稿。")
             appendLine("- 订单提交必须等待用户确认。")
-            appendLine("- 工具参数必须符合对应 JSON Schema。")
+            appendLine("- WBCCU/CCU 规划意图：用户问我的库存、我的 WB、我的 CCU、升级路线、最省钱、最少新增现金时，先调用 get_rsi_inventory；需要当前 Warbond 折扣/目标船价格时，再调用 get_daily_wb。")
+            appendLine("- WBCCU 规划回答必须区分“新增现金”和“有效总成本”，标注当前可完成、需买、需等、未确认，并列出会消耗的关键 CCU。")
             appendLine("- 当工具结果不足以回答问题时，可以继续调用另一个工具。")
-            appendLine("- 收到有效 tool_result 后，如果已经足以回答用户问题，必须输出 final_answer；不要重复调用同一个工具和同一组参数。")
-            appendLine("- 当已经有足够信息时，输出 final_answer。")
-            appendLine()
-            appendLine("可用工具：")
-            appendLine(JSONArray(tools.map { it.toJson() }).toString())
+            appendLine("- 收到工具结果后，如果已经足以回答用户问题，就直接回答；不要用相同参数重复调用同一个工具。")
+            appendLine("- 回答要保留清晰格式：不同板块之间留空行，列表逐行输出，不要把所有文字挤成一段。")
         }
         val messages = mutableListOf(DeepSeekMessage("system", sanitize(system)))
         history.takeLast(MAX_HISTORY).forEach { msg ->
@@ -96,13 +94,30 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
             }
             messages += DeepSeekMessage(role, sanitize(msg.content))
         }
+        recentToolEvidence(history)?.let { messages += DeepSeekMessage("system", sanitize(it)) }
         messages += DeepSeekMessage("user", sanitize(userText))
-        loopMessages.forEach { messages += DeepSeekMessage(it.role, sanitize(it.content)) }
+        loopMessages.forEach {
+            messages += DeepSeekMessage(
+                role = it.role,
+                content = sanitize(it.content),
+                toolCalls = it.toolCalls,
+                toolCallId = it.toolCallId,
+            )
+        }
         return messages
     }
 
+    private fun recentToolEvidence(history: List<AgentMessage>): String? {
+        val summary = history.takeLast(MAX_HISTORY)
+            .lastOrNull { it.role == AgentMessageRole.ASSISTANT && it.toolSummary.isNotBlank() }
+            ?.toolSummary
+            ?.trim()
+        if (summary.isNullOrBlank()) return null
+        return "最近一次工具证据（供追问参考，可直接引用，不要凭空编造新数据）：\n$summary"
+    }
+
     private fun formatToolResults(results: List<AgentToolResult>): String = buildString {
-        val useful = results.filter { it.hasUsefulData() }
+        val useful = results.filter { AgentResultFormatter.hasUsefulData(it) }
         val visible = useful.ifEmpty { results.take(3) }
         appendLine("可用工具证据：")
         visible.forEach { result ->
@@ -114,7 +129,7 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
     }
 
     private fun formatSkillResults(results: List<SkillResult>): String = buildString {
-        val useful = results.filter { it.hasUsefulData() }
+        val useful = results.filter { AgentResultFormatter.hasUsefulData(it) }
         val visible = useful.ifEmpty { results.take(3) }
         appendLine("可用查询证据：")
         visible.forEach { result ->
@@ -124,12 +139,6 @@ class AgentPromptBuilder(private val profile: AgentProfile) {
         }
         if (useful.isEmpty()) appendLine("没有可靠命中时，最终回答只需简短说明未命中并询问一个可帮助定位的关键词。")
     }
-
-    private fun AgentToolResult.hasUsefulData(): Boolean =
-        error == null && confidence > 0f && (facts.isNotEmpty() || !summary.contains("未命中"))
-
-    private fun SkillResult.hasUsefulData(): Boolean =
-        error == null && confidence > 0f && (facts.isNotEmpty() || !summary.contains("未命中"))
 
     private fun sanitize(value: String): String {
         var text = value

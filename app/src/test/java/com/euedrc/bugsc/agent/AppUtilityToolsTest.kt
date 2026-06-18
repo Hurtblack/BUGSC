@@ -1,5 +1,8 @@
 package com.euedrc.bugsc.agent
 
+import com.euedrc.bugsc.InventoryItem
+import com.euedrc.bugsc.ServiceStatusLevel
+import com.euedrc.bugsc.ToolHeaderStatus
 import com.euedrc.bugsc.wb.WbRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -55,6 +58,57 @@ class AppUtilityToolsTest {
                 nextOpenAtSeconds = 1_800,
                 source = "已校准",
                 anchorAtSeconds = 1_000,
+            )
+        }
+    }
+
+    private class FakeRsiInventoryProvider : RsiInventoryProvider {
+        override fun lastSync(): String = "2026-06-18 11:20:00"
+
+        override fun shipAliases(): Map<String, String> = mapOf(
+            "Terrapin" to "陆龟",
+            "Railen" to "瑞伦",
+            "Gladius" to "短剑",
+            "Hawk" to "鹰",
+        )
+
+        override fun loadItems(): List<InventoryItem> = listOf(
+            inventoryItem(
+                name = "Upgrade - Terrapin to Railen Warbond Edition",
+                priceCents = 500,
+                page = 5,
+            ),
+            inventoryItem(
+                name = "Upgrade - Gladius to Hawk Standard Edition",
+                priceCents = 500,
+                page = 12,
+            ),
+            inventoryItem(
+                name = "Railen Paint Pack",
+                priceCents = 1100,
+                page = 3,
+            ),
+        )
+    }
+
+    private class RecordingRsiStatusProvider : SyncableRsiServerStatusProvider {
+        val calls = mutableListOf<String>()
+
+        override fun sync(): AppToolSyncResult {
+            calls += "sync"
+            return AppToolSyncResult(success = true, message = "已同步 RSI 状态")
+        }
+
+        override fun snapshot(): RsiServerStatusSnapshot {
+            calls += "snapshot"
+            return RsiServerStatusSnapshot(
+                status = ToolHeaderStatus(
+                    platform = ServiceStatusLevel.OPERATIONAL,
+                    persistentUniverse = ServiceStatusLevel.DEGRADED,
+                    arenaCommander = ServiceStatusLevel.OUTAGE,
+                ),
+                updatedAt = 1_787_000_000_000L,
+                source = "remote",
             )
         }
     }
@@ -136,13 +190,101 @@ class AppUtilityToolsTest {
     }
 
     @Test
+    fun rsiServerStatusToolSyncsAndReturnsServiceLevels() = runBlocking {
+        val provider = RecordingRsiStatusProvider()
+        val tool = RsiServerStatusTool(provider)
+
+        val result = tool.run(AgentToolCall("get_rsi_server_status", emptyMap()))
+
+        assertEquals(listOf("sync", "snapshot"), provider.calls)
+        assertTrue(result.summary.contains("已同步 RSI 状态"))
+        assertTrue(result.summary.contains("Platform：正常"))
+        assertTrue(result.summary.contains("Persistent Universe：降级"))
+        assertTrue(result.summary.contains("Arena Commander：停机"))
+        assertTrue(result.facts.any { it.label == "Persistent Universe" && it.value == "降级" })
+        assertEquals(0.78f, result.confidence)
+    }
+
+    @Test
     fun capabilitiesToolListsCurrentAppCapabilities() = runBlocking {
         val tool = AppCapabilitiesTool()
 
-        val result = tool.run(AgentToolCall("list_app_capabilities", mapOf("query" to "wb")))
+        val result = tool.run(AgentToolCall("list_app_capabilities", mapOf("query" to "签到")))
 
-        assertTrue(result.summary.contains("每日 WB"))
-        assertTrue(result.summary.contains("get_daily_wb"))
-        assertTrue(result.facts.any { it.label == "能力" && it.value.contains("每日 WB") })
+        assertTrue(result.summary.contains("SCM 签到"))
+        assertTrue(result.summary.contains("scm_sign_in"))
+        assertTrue(result.facts.any { it.label == "能力" && it.value.contains("SCM 签到") })
+    }
+
+    @Test
+    fun capabilitiesToolListsMyOrdersCapability() = runBlocking {
+        val tool = AppCapabilitiesTool()
+
+        val result = tool.run(AgentToolCall("list_app_capabilities", mapOf("query" to "我的挂单")))
+
+        assertTrue(result.summary.contains("SCM 我的挂单"))
+        assertTrue(result.summary.contains("list_my_orders"))
+        assertTrue(result.facts.any { it.label == "能力" && it.value.contains("我的挂单") })
+    }
+
+    @Test
+    fun capabilitiesToolListsRsiServerStatusCapability() = runBlocking {
+        val tool = AppCapabilitiesTool()
+
+        val result = tool.run(AgentToolCall("list_app_capabilities", mapOf("query" to "服务器状态")))
+
+        assertTrue(result.summary.contains("RSI 服务器状态"))
+        assertTrue(result.summary.contains("get_rsi_server_status"))
+        assertTrue(result.facts.any { it.label == "能力" && it.value.contains("服务器状态") })
+    }
+
+    @Test
+    fun rsiInventoryToolReturnsTranslatedWarbondCcus() = runBlocking {
+        val tool = RsiInventoryTool(FakeRsiInventoryProvider())
+
+        val result = tool.run(
+            AgentToolCall(
+                "get_rsi_inventory",
+                mapOf("type" to "ccu", "query" to "瑞伦"),
+            ),
+        )
+
+        assertTrue(result.summary.contains("陆龟 -> 瑞伦"))
+        assertTrue(result.summary.contains("Terrapin -> Railen"))
+        assertTrue(result.summary.contains("CCU / WB / 价格 $5.00"))
+        assertTrue(result.facts.any { it.label == "WB" && it.value == "陆龟 -> 瑞伦" })
+        assertEquals(0.72f, result.confidence)
+    }
+
+    @Test
+    fun rsiInventoryToolCanFilterPaintItems() = runBlocking {
+        val tool = RsiInventoryTool(FakeRsiInventoryProvider())
+
+        val result = tool.run(AgentToolCall("get_rsi_inventory", mapOf("type" to "paint")))
+
+        assertTrue(result.summary.contains("Railen Paint Pack"))
+        assertTrue(result.summary.contains("皮肤"))
+    }
+
+    private companion object {
+        fun inventoryItem(
+            name: String,
+            priceCents: Int,
+            page: Int,
+        ): InventoryItem = InventoryItem(
+            id = "$page-$name",
+            name = name,
+            priceCents = priceCents,
+            currentPriceCents = priceCents,
+            status = "Attributed",
+            date = "2026年06月18日",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = page,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = false,
+        )
     }
 }
