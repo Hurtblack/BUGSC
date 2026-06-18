@@ -11,6 +11,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -98,12 +99,9 @@ class WbFragment : Fragment() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { bottomMargin = dp(10) }
-            item.url?.let { url ->
-                setOnClickListener {
-                    runCatching {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }.onFailure { toast("无法打开链接") }
-                }
+            setOnClickListener {
+                AnalyticsTracker.get(requireContext()).trackFeatureClick("daily_wb", "ship_upgrades")
+                openUrl(SHIP_UPGRADES_URL)
             }
         }
 
@@ -165,6 +163,19 @@ class WbFragment : Fragment() {
         }
         col.addView(priceRow)
         card.addView(col)
+        item.url?.let { url ->
+            card.addView(ImageButton(ctx).apply {
+                setImageResource(R.drawable.ic_open_in_new_24)
+                setColorFilter(ContextCompat.getColor(ctx, R.color.sc_accent))
+                background = selectableBorderlessBackground()
+                contentDescription = "查看商品详情"
+                layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = dp(8) }
+                setOnClickListener {
+                    AnalyticsTracker.get(requireContext()).trackFeatureClick("daily_wb", "ship_detail")
+                    openUrl(url)
+                }
+            })
+        }
         return card
     }
 
@@ -175,6 +186,18 @@ class WbFragment : Fragment() {
 
     private fun toast(msg: String) =
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+
+    private fun openUrl(url: String) {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure { toast("无法打开链接") }
+    }
+
+    private fun selectableBorderlessBackground() =
+        TypedValue().let { out ->
+            requireContext().theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, out, true)
+            ContextCompat.getDrawable(requireContext(), out.resourceId)
+        }
 
     private fun money(currency: String, amount: Double): String {
         val n = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
@@ -199,4 +222,8 @@ class WbFragment : Fragment() {
     private fun dp(v: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics,
     ).toInt()
+
+    companion object {
+        private const val SHIP_UPGRADES_URL = "https://robertsspaceindustries.com/en/pledge/ship-upgrades"
+    }
 }
