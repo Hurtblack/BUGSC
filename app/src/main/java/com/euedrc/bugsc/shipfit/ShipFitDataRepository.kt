@@ -100,6 +100,18 @@ class ShipFitDataRepository(private val context: Context) {
                 zhName = zh.ships[name]?.takeIf { it.isNotBlank() && !it.equals(name, ignoreCase = true) },
             )
         }
+        if (shipsArr != null) {
+            val existingNames = result.map { it.name.lowercase() }.toMutableSet()
+            val existingIds = result.map { it.id.lowercase() }.toMutableSet()
+            for (i in 0 until shipsArr.length()) {
+                val u = shipsArr.optJSONObject(i) ?: continue
+                val card = createUexOnlyShipCard(u, zh.ships[u.optString("name")]) ?: continue
+                if (card.name.lowercase() in existingNames || card.id.lowercase() in existingIds) continue
+                result += card
+                existingNames += card.name.lowercase()
+                existingIds += card.id.lowercase()
+            }
+        }
         return result.sortedBy { it.name.lowercase() }
     }
 
@@ -463,5 +475,67 @@ class ShipFitDataRepository(private val context: Context) {
         )
         val existingKeys = filtered.map { it.key }.toSet()
         return filtered + fixedCoreSlots.filter { it.key !in existingKeys }
+    }
+
+    companion object {
+        internal fun createUexOnlyShipCard(u: JSONObject, zhName: String?): ShipCard? {
+            val name = cleanUexString(u, "name") ?: return null
+            val id = cleanUexString(u, "slug")
+                ?: name.lowercase().replace(Regex("""[^a-z0-9]+"""), "-").trim('-')
+            if (id.isBlank()) return null
+            return ShipCard(
+                id = id,
+                name = name,
+                uexId = u.optInt("id").takeIf { it > 0 },
+                imageUrl = resolvePrimaryImageUrlFromUex(u),
+                backupImageUrl = resolveBackupImageUrlFromUex(u),
+                size = resolveSizeFromUex(u),
+                crew = cleanUexString(u, "crew")?.takeIf { it != "0" },
+                cargo = cleanUexString(u, "scu")?.takeIf { it != "0" }?.let { "$it SCU" },
+                officialUrl = cleanUexString(u, "url_store"),
+                enginePortCount = 0,
+                engineSizeScore = 0,
+                slots = emptyList(),
+                slotPatched = false,
+                zhName = zhName?.takeIf { it.isNotBlank() && !it.equals(name, ignoreCase = true) },
+            )
+        }
+
+        private fun resolveSizeFromUex(u: JSONObject): String? {
+            val sizeObj = u.optJSONObject("size") ?: return null
+            val l = sizeObj.optInt("length", 0)
+            val w = sizeObj.optInt("width", 0)
+            val h = sizeObj.optInt("height", 0)
+            return if (l > 0 && w > 0 && h > 0) "${l}/${w}/${h}m" else null
+        }
+
+        private fun resolvePrimaryImageUrlFromUex(u: JSONObject): String? {
+            val raw = cleanUexString(u, "url_photos") ?: return cleanUexString(u, "url_photo")
+            val firstGallery = runCatching {
+                val arr = org.json.JSONArray(raw)
+                (0 until arr.length())
+                    .mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() && it != "null" } }
+                    .firstOrNull()
+            }.getOrNull()
+            return firstGallery ?: cleanUexString(u, "url_photo")
+        }
+
+        private fun resolveBackupImageUrlFromUex(u: JSONObject): String? {
+            val direct = cleanUexString(u, "url_photo")
+            val raw = cleanUexString(u, "url_photos") ?: return direct
+            val secondGallery = runCatching {
+                val arr = org.json.JSONArray(raw)
+                (0 until arr.length())
+                    .mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() && it != "null" } }
+                    .drop(1)
+                    .firstOrNull()
+            }.getOrNull()
+            return secondGallery ?: direct
+        }
+
+        private fun cleanUexString(u: JSONObject, key: String): String? =
+            u.optString(key)
+                .trim()
+                .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
     }
 }
