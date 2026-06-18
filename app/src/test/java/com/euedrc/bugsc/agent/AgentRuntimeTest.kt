@@ -1,6 +1,7 @@
 package com.euedrc.bugsc.agent
 
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,6 +20,37 @@ class AgentRuntimeTest {
     private class FakeTransport(private val content: String) : DeepSeekTransport {
         override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse =
             DeepSeekHttpResponse(200, """{"choices":[{"message":{"role":"assistant","content":${org.json.JSONObject.quote(content)}}}]}""")
+    }
+
+    private class StreamSequenceTransport(private val responses: List<List<String>>) : DeepSeekTransport {
+        private var index = 0
+
+        override fun execute(request: DeepSeekHttpRequest): DeepSeekHttpResponse {
+            throw AssertionError("tool loop should use streaming")
+        }
+
+        override fun executeStream(
+            request: DeepSeekHttpRequest,
+            onEvent: (DeepSeekStreamEvent) -> Unit,
+        ): DeepSeekHttpResponse {
+            responses.getOrElse(index) { responses.last() }.forEach { onEvent(DeepSeekStreamEvent(it)) }
+            index += 1
+            return DeepSeekHttpResponse(200, "")
+        }
+    }
+
+    private class EmptyTool : AgentTool {
+        override val name: String = "search_ship"
+        override val description: String = "飞船资料查询"
+
+        override suspend fun run(call: AgentToolCall): AgentToolResult =
+            AgentToolResult(
+                call = call,
+                summary = "飞船资料 未命中相关数据",
+                facts = emptyList(),
+                sources = listOf(AgentSource("飞船资料", "local")),
+                confidence = 0f,
+            )
     }
 
     @Test
@@ -82,6 +114,38 @@ class AgentRuntimeTest {
         assertFalse(answer.contains("<search>"))
     }
 
+    @Test
+    fun toolSelectionDeltasAreNotShownAsFinalAnswerDraft() = runBlocking {
+        val events = mutableListOf<AgentRuntimeEvent>()
+        val transport = StreamSequenceTransport(
+            listOf(
+                listOf(
+                    streamDelta(content = "你好，这个可以这样看。"),
+                    streamDelta(toolName = "search_ship", arguments = """{"query":"不存在"}"""),
+                    "[DONE]",
+                ),
+                listOf(
+                    streamDelta(content = "没有查到可靠资料。"),
+                    "[DONE]",
+                ),
+            ),
+        )
+        val runtime = AgentRuntime(
+            analyzer = QueryAnalyzer(),
+            toolRegistry = AgentToolRegistry(listOf(EmptyTool())),
+            promptBuilder = AgentPromptBuilder(AgentProfileProvider.defaultProfile()),
+            deepSeekClient = DeepSeekClient(transport),
+            settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
+            toolCallingEnabled = true,
+            observer = events::add,
+        )
+
+        runtime.answer("不存在的船是什么")
+
+        val deltas = events.filterIsInstance<AgentRuntimeEvent.AnswerDelta>().map { it.delta }
+        assertFalse(deltas.any { it.contains("你好，这个可以这样看") })
+    }
+
     private fun runtime(result: SkillResult, modelContent: String): AgentRuntime =
         AgentRuntime(
             analyzer = QueryAnalyzer(),
@@ -90,4 +154,26 @@ class AgentRuntimeTest {
             deepSeekClient = DeepSeekClient(FakeTransport(modelContent)),
             settingsProvider = { AgentSettings(apiKey = "sk-test", model = AgentSettingsStore.MODEL_DEEPSEEK_FLASH) },
         )
+
+    private fun streamDelta(content: String? = null, toolName: String? = null, arguments: String = "{}"): String {
+        val delta = JSONObject()
+        if (content != null) delta.put("content", content)
+        if (toolName != null) {
+            delta.put(
+                "tool_calls",
+                org.json.JSONArray(
+                    listOf(
+                        JSONObject()
+                            .put("index", 0)
+                            .put("id", "call_1")
+                            .put("type", "function")
+                            .put("function", JSONObject().put("name", toolName).put("arguments", arguments)),
+                    ),
+                ),
+            )
+        }
+        return JSONObject()
+            .put("choices", org.json.JSONArray(listOf(JSONObject().put("delta", delta))))
+            .toString()
+    }
 }

@@ -75,6 +75,7 @@ class AgentRuntime(
         val seenCalls = LinkedHashSet<String>()
         repeat(maxToolCallingSteps) {
             observer?.invoke(AgentRuntimeEvent.Thinking)
+            val bufferedDeltas = mutableListOf<String>()
             val response = client.chatWithToolsStreaming(
                 settings,
                 builder.buildToolCalling(
@@ -83,13 +84,14 @@ class AgentRuntime(
                     loopMessages = loopMessages,
                 ),
                 tools,
-                onDelta = { delta -> observer?.invoke(AgentRuntimeEvent.AnswerDelta(delta)) },
+                onDelta = { delta -> bufferedDeltas += delta },
             )
             runCatching { Log.d(TAG, "model_response=${formatModelResponse(response)}") }
             observer?.invoke(AgentRuntimeEvent.ModelJson(formatModelResponse(response)))
             // 没有工具调用即视为最终回答；伪查询/JSON 残留交给 asPlainNaturalAnswer 过滤。
             if (response.toolCalls.isEmpty()) {
                 response.content.asPlainNaturalAnswer()?.let { answer ->
+                    emitBufferedDeltas(bufferedDeltas, answer)
                     observer?.invoke(AgentRuntimeEvent.FinalAnswerReady(answer))
                     return answer
                 }
@@ -124,6 +126,13 @@ class AgentRuntime(
             }
         }
         return groundedLoopFallback(text, toolResults)
+    }
+
+    private fun emitBufferedDeltas(deltas: List<String>, answer: String) {
+        if (deltas.isEmpty()) return
+        val combined = deltas.joinToString("")
+        if (combined.trim() != answer.trim()) return
+        deltas.forEach { observer?.invoke(AgentRuntimeEvent.AnswerDelta(it)) }
     }
 
     private fun parseArguments(raw: String): Map<String, String> {
