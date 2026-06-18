@@ -81,7 +81,7 @@
     <fragment
         android:id="@+id/InventoryFragment"
         android:name="com.euedrc.bugsc.InventoryFragment"
-        android:label="库存查看"
+        android:label="RSI 机库库存"
         tools:layout="@layout/fragment_inventory" />
 
     <fragment

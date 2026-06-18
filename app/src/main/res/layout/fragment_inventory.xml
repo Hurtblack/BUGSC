@@ -33,7 +33,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:letterSpacing="0.1"
-                android:text="库存查看"
+                android:text="RSI 机库库存"
                 android:textColor="@color/sc_text"
                 android:textSize="20sp"
                 android:textStyle="bold" />

@@ -24,6 +24,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -59,6 +60,7 @@ class InventoryFragment : Fragment() {
     private var requestCountdownJob: kotlinx.coroutines.Job? = null
     private var inventoryItems: List<InventoryItem> = emptyList()
     private var currentDisplayPage = 0
+    private val shipAliases by lazy { loadShipAliases() }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_inventory, container, false)
@@ -251,6 +253,7 @@ class InventoryFragment : Fragment() {
     }
 
     private fun createItemCard(item: InventoryItem): View {
+        val display = InventoryDisplayFormatter.format(item, shipAliases)
         val card = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -270,7 +273,7 @@ class InventoryFragment : Fragment() {
             }
             setBackgroundColor(Color.parseColor("#0a1420"))
             scaleType = ImageView.ScaleType.CENTER_CROP
-            contentDescription = item.name
+            contentDescription = display.title
         }
         card.addView(image)
         loadItemImage(item.imageUrl, image)
@@ -284,12 +287,16 @@ class InventoryFragment : Fragment() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            text = item.name
+            text = display.title
             textSize = 14f
             setTextColor(Color.parseColor("#d8eaf2"))
             typeface = Typeface.DEFAULT_BOLD
             maxLines = 2
         })
+
+        if (display.subtitle.isNotBlank()) {
+            content.addView(metaText(display.subtitle))
+        }
 
         val priceRow = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -302,14 +309,12 @@ class InventoryFragment : Fragment() {
         priceRow.addView(priceBlock("当前价格", item.currentPriceCents))
         content.addView(priceRow)
 
-        val tags = listOfNotNull(
-            item.insurance.takeIf { it.isNotBlank() },
-            "P${item.page}",
-            "礼物".takeIf { item.canGift },
-            "可融".takeIf { item.canReclaim },
-            "CCU".takeIf { item.canUpgrade }
-        ).joinToString("  ·  ")
+        val tags = display.tags.joinToString("  ·  ")
         content.addView(metaText(tags.ifBlank { item.status.ifBlank { item.date } }))
+
+        if (display.detail.isNotBlank()) {
+            content.addView(metaText(display.detail))
+        }
 
         if (item.date.isNotBlank()) {
             content.addView(metaText(item.date))
@@ -482,6 +487,19 @@ class InventoryFragment : Fragment() {
             avatarUrl = prefs.getString(KEY_PROFILE_AVATAR, "") ?: ""
         )
     }
+
+    private fun loadShipAliases(): Map<String, String> = runCatching {
+        val root = requireContext().assets.open("shipfit/zh_aliases.json")
+            .bufferedReader().use { it.readText() }
+            .let { JSONObject(it) }
+        val ships = root.optJSONObject("ships") ?: return@runCatching emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (key in ships.keys()) {
+            val value = ships.optString(key)
+            if (key.isNotBlank() && value.isNotBlank()) out[key] = value
+        }
+        out
+    }.getOrDefault(emptyMap())
 
     private fun saveProfile(profile: RsiUserProfile) {
         prefs.edit()
