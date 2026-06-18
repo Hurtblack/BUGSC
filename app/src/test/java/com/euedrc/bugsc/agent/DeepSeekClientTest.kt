@@ -77,6 +77,63 @@ class DeepSeekClientTest {
     }
 
     @Test
+    fun chatUsesKimiOpenAiCompatibleEndpointFromSettings() {
+        val transport = FakeTransport(
+            DeepSeekHttpResponse(
+                code = 200,
+                body = """{"choices":[{"message":{"role":"assistant","content":"Kimi OK"}}]}""",
+            ),
+        )
+        val client = DeepSeekClient(transport)
+
+        val content = client.chat(
+            settings = AgentSettings(
+                apiKey = "kimi-key",
+                providerId = AgentSettingsStore.PROVIDER_KIMI,
+                model = AgentSettingsStore.MODEL_KIMI_K2_5,
+                baseUrl = AgentSettingsStore.BASE_URL_KIMI,
+                authMode = AgentAuthMode.BEARER,
+            ),
+            messages = listOf(DeepSeekMessage("user", "你好")),
+        )
+
+        assertEquals("Kimi OK", content)
+        assertEquals("https://api.moonshot.ai/v1/chat/completions", transport.request.url)
+        assertEquals("Bearer kimi-key", transport.request.headers["Authorization"])
+        val json = JSONObject(transport.request.body)
+        assertEquals(AgentSettingsStore.MODEL_KIMI_K2_5, json.getString("model"))
+    }
+
+    @Test
+    fun chatUsesXiaomiMimoApiKeyHeaderWhenConfigured() {
+        val transport = FakeTransport(
+            DeepSeekHttpResponse(
+                code = 200,
+                body = """{"choices":[{"message":{"role":"assistant","content":"MiMo OK"}}]}""",
+            ),
+        )
+        val client = DeepSeekClient(transport)
+
+        val content = client.chat(
+            settings = AgentSettings(
+                apiKey = "mimo-key",
+                providerId = AgentSettingsStore.PROVIDER_XIAOMI_MIMO,
+                model = AgentSettingsStore.MODEL_XIAOMI_MIMO_PRO,
+                baseUrl = AgentSettingsStore.BASE_URL_XIAOMI_MIMO,
+                authMode = AgentAuthMode.API_KEY,
+            ),
+            messages = listOf(DeepSeekMessage("user", "你好")),
+        )
+
+        assertEquals("MiMo OK", content)
+        assertEquals("https://api.xiaomimimo.com/v1/chat/completions", transport.request.url)
+        assertEquals("mimo-key", transport.request.headers["api-key"])
+        assertTrue(!transport.request.headers.containsKey("Authorization"))
+        val json = JSONObject(transport.request.body)
+        assertEquals(AgentSettingsStore.MODEL_XIAOMI_MIMO_PRO, json.getString("model"))
+    }
+
+    @Test
     fun chatWithToolsSendsToolSchemaAndParsesToolCalls() {
         val transport = FakeTransport(
             DeepSeekHttpResponse(

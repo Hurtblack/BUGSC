@@ -153,7 +153,7 @@ class DeepSeekClient(
         tools: List<AgentToolDefinition>,
     ): JSONObject {
         if (settings.apiKey.isBlank()) {
-            throw DeepSeekClientException("请先配置 DeepSeek API Key")
+            throw DeepSeekClientException("请先配置模型 API Key")
         }
         val request = buildRequest(settings, messages, tools, stream = false)
         val resp = executeWithRetries { transport.execute(request) }
@@ -176,7 +176,7 @@ class DeepSeekClient(
         onDelta: (String) -> Unit,
     ): DeepSeekChatResult {
         if (settings.apiKey.isBlank()) {
-            throw DeepSeekClientException("请先配置 DeepSeek API Key")
+            throw DeepSeekClientException("请先配置模型 API Key")
         }
         val request = buildRequest(settings, messages, tools, stream = true)
         val content = StringBuilder()
@@ -240,7 +240,7 @@ class DeepSeekClient(
         stream: Boolean,
     ): DeepSeekHttpRequest {
         val payload = JSONObject()
-            .put("model", settings.model.ifBlank { AgentSettingsStore.MODEL_DEEPSEEK_FLASH })
+            .put("model", settings.model.ifBlank { AgentSettingsStore.providerPreset(settings.providerId).defaultModel })
             .put("messages", buildMessagesJson(messages))
             .put("stream", stream)
         if (tools.isNotEmpty()) {
@@ -254,13 +254,18 @@ class DeepSeekClient(
             )
             payload.put("tool_choice", "auto")
         }
+        val headers = linkedMapOf(
+            "Content-Type" to "application/json",
+            "Accept" to if (stream) "text/event-stream" else "application/json",
+        )
+        when (settings.authMode) {
+            AgentAuthMode.BEARER -> headers["Authorization"] = "Bearer ${settings.apiKey}"
+            AgentAuthMode.API_KEY -> headers["api-key"] = settings.apiKey
+        }
+        val endpointBase = settings.effectiveBaseUrl.ifBlank { baseUrl }
         return DeepSeekHttpRequest(
-            url = baseUrl.trimEnd('/') + "/chat/completions",
-            headers = mapOf(
-                "Authorization" to "Bearer ${settings.apiKey}",
-                "Content-Type" to "application/json",
-                "Accept" to if (stream) "text/event-stream" else "application/json",
-            ),
+            url = endpointBase.trimEnd('/') + "/chat/completions",
+            headers = headers,
             body = payload.toString(),
         )
     }
@@ -415,7 +420,7 @@ class DeepSeekClient(
     }
 
     companion object {
-        const val BASE_URL = "https://api.deepseek.com"
+        const val BASE_URL = AgentSettingsStore.BASE_URL_DEEPSEEK
         private const val DEFAULT_REQUEST_DEADLINE_MS = 90_000L
         private val DEFAULT_RETRY_DELAYS_MS = listOf(400L, 900L)
     }

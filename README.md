@@ -38,7 +38,7 @@ QQ群：330941212
 | **工具** | BUG 分享/解决 | ONLINE | PC 常见问题与解决方案，支持硬件标签筛选 |
 | **工具** | 灯状态计时辅助 | ONLINE | 机库灯状态确认、倒计时、多端校准（接 exec.xyxyll.com），支持按下次开门时间提前 N 分钟一键添加系统闹钟 |
 | **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价；卡片直达 Ship Upgrades，详情入口可查看商品页 |
-| **工具** | MobiGuide(AI助手) | BETA | DeepSeek Tool Calling Agent Loop，按问题自主调用本地资料、SCM 市场/订单/签到、RSI 库存/状态、行政机库、每日 WB 等工具 |
+| **工具** | MobiGuide(AI助手) | BETA | OpenAI-Compatible Tool Calling Agent Loop，默认 DeepSeek，可切换 Kimi / 小米 MiMo / 自定义 API |
 | **资讯** | 资讯 | ONLINE | citizenwiki 新闻接口直连，资讯列表 + 关键词搜索，点击跳转原文 |
 | **查询** | SCM 市场 | MARKET | flowcld SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、品质、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
@@ -74,10 +74,10 @@ app/src/main/
 │   │   ├── BugData.kt           # 本地 BUG 条目（硬编码）
 │   │   └── BugRepository.kt     # BUG 列表加载与筛选
 │   ├── agent/
-│   │   ├── AgentRuntime.kt      # MobiGuide Agent Loop（DeepSeek tool_calls + streaming）
+│   │   ├── AgentRuntime.kt      # MobiGuide Agent Loop（tool_calls + streaming）
 │   │   ├── AgentHermesModels.kt # AgentTool / ToolRegistry / ToolExecutor 模型
-│   │   ├── DeepSeekClient.kt    # DeepSeek Chat Completions / streaming / tool_calls 客户端
-│   │   ├── AgentPromptBuilder.kt # DeepSeek 系统提示与历史/工具证据上下文
+│   │   ├── DeepSeekClient.kt    # OpenAI-compatible Chat Completions / streaming / tool_calls 客户端
+│   │   ├── AgentPromptBuilder.kt # 模型系统提示与历史/工具证据上下文
 │   │   ├── AgentToolIntents.kt  # 工具意图提示与确定性兜底映射
 │   │   ├── AgentResultFormatter.kt # 工具结果 fallback 摘要格式化
 │   │   ├── LocalAgentDataProvider.kt # 本地飞船/矿物/蓝图/任务/维克洛资料
@@ -123,10 +123,10 @@ app/src/main/
 
 ## MobiGuide(AI助手)
 
-MobiGuide 是应用内的星际公民资料与 SCM 交易助手。当前版本使用 DeepSeek Chat Completions 的 **Tool Calling Agent Loop**：
+MobiGuide 是应用内的星际公民资料与 SCM 交易助手。当前版本使用 OpenAI-Compatible Chat Completions 的 **Tool Calling Agent Loop**。DeepSeek 仍是默认模型服务商，同时支持在设置页切换 Kimi / Moonshot、小米 MiMo 或自定义兼容接口：
 
-1. App 将工具名称、描述和参数 JSON Schema 作为 `tools` 传给 DeepSeek。
-2. DeepSeek 返回自然语言回答或 `tool_calls`；App 按 `tool_call_id` 执行并回灌工具结果。
+1. App 将工具名称、描述和参数 JSON Schema 作为 `tools` 传给当前模型服务。
+2. 模型返回自然语言回答或 `tool_calls`；App 按 `tool_call_id` 执行并回灌工具结果。
 3. 工具证据会写入对话历史摘要，后续追问可以复用最近一次结构化结果。
 4. 回答支持流式增量显示，用户可中途停止本轮请求。
 5. 达到最大工具步数、重复调用或模型未调用工具时，会进入确定性兜底 / 证据摘要 fallback。

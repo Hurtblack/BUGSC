@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -20,8 +21,15 @@ class AgentSettingsFragment : Fragment() {
 
     private lateinit var store: AgentSettingsStore
     private lateinit var etKey: EditText
-    private lateinit var rbFlash: RadioButton
-    private lateinit var rbPro: RadioButton
+    private lateinit var etModel: EditText
+    private lateinit var etBaseUrl: EditText
+    private lateinit var rgProvider: RadioGroup
+    private lateinit var rbProviderDeepSeek: RadioButton
+    private lateinit var rbProviderKimi: RadioButton
+    private lateinit var rbProviderMimo: RadioButton
+    private lateinit var rbProviderCustom: RadioButton
+    private lateinit var rbAuthBearer: RadioButton
+    private lateinit var rbAuthApiKey: RadioButton
     private lateinit var tvStatus: TextView
 
     override fun onCreateView(inflater: LayoutInflater, parent: ViewGroup?, state: Bundle?): View =
@@ -31,9 +39,17 @@ class AgentSettingsFragment : Fragment() {
         super.onViewCreated(view, state)
         store = AgentStores.settings(requireContext())
         etKey = view.findViewById(R.id.et_agent_api_key)
-        rbFlash = view.findViewById(R.id.rb_agent_model_flash)
-        rbPro = view.findViewById(R.id.rb_agent_model_pro)
+        etModel = view.findViewById(R.id.et_agent_model)
+        etBaseUrl = view.findViewById(R.id.et_agent_base_url)
+        rgProvider = view.findViewById(R.id.rg_agent_provider)
+        rbProviderDeepSeek = view.findViewById(R.id.rb_agent_provider_deepseek)
+        rbProviderKimi = view.findViewById(R.id.rb_agent_provider_kimi)
+        rbProviderMimo = view.findViewById(R.id.rb_agent_provider_mimo)
+        rbProviderCustom = view.findViewById(R.id.rb_agent_provider_custom)
+        rbAuthBearer = view.findViewById(R.id.rb_agent_auth_bearer)
+        rbAuthApiKey = view.findViewById(R.id.rb_agent_auth_api_key)
         tvStatus = view.findViewById(R.id.tv_agent_setting_status)
+        rgProvider.setOnCheckedChangeListener { _, _ -> applySelectedPreset() }
         view.findViewById<Button>(R.id.btn_agent_save).setOnClickListener { save() }
         view.findViewById<Button>(R.id.btn_agent_test).setOnClickListener { testConnection() }
         bind()
@@ -42,8 +58,16 @@ class AgentSettingsFragment : Fragment() {
     private fun bind() {
         val s = store.settings()
         etKey.setText(s.apiKey)
-        rbPro.isChecked = s.model == AgentSettingsStore.MODEL_DEEPSEEK_PRO
-        rbFlash.isChecked = !rbPro.isChecked
+        when (s.providerId) {
+            AgentSettingsStore.PROVIDER_KIMI -> rbProviderKimi.isChecked = true
+            AgentSettingsStore.PROVIDER_XIAOMI_MIMO -> rbProviderMimo.isChecked = true
+            AgentSettingsStore.PROVIDER_CUSTOM -> rbProviderCustom.isChecked = true
+            else -> rbProviderDeepSeek.isChecked = true
+        }
+        etModel.setText(s.model)
+        etBaseUrl.setText(s.effectiveBaseUrl)
+        rbAuthApiKey.isChecked = s.authMode == AgentAuthMode.API_KEY
+        rbAuthBearer.isChecked = !rbAuthApiKey.isChecked
         tvStatus.text = when (s.lastTestStatus) {
             AgentConnectionStatus.SUCCESS -> getString(R.string.agent_test_success)
             AgentConnectionStatus.FAILURE -> getString(R.string.agent_test_failure)
@@ -56,7 +80,10 @@ class AgentSettingsFragment : Fragment() {
         store.save(
             AgentSettings(
                 apiKey = etKey.text.toString().trim(),
-                model = if (rbPro.isChecked) AgentSettingsStore.MODEL_DEEPSEEK_PRO else AgentSettingsStore.MODEL_DEEPSEEK_FLASH,
+                providerId = selectedProviderId(),
+                model = etModel.text.toString().trim(),
+                baseUrl = etBaseUrl.text.toString().trim(),
+                authMode = selectedAuthMode(),
                 lastTestAt = if (status == null) current.lastTestAt else System.currentTimeMillis(),
                 lastTestStatus = status ?: current.lastTestStatus,
             ),
@@ -73,6 +100,26 @@ class AgentSettingsFragment : Fragment() {
                 DeepSeekClient(UrlConnectionDeepSeekTransport()).testConnection(store.settings())
             }
             save(if (ok) AgentConnectionStatus.SUCCESS else AgentConnectionStatus.FAILURE)
+        }
+    }
+
+    private fun selectedProviderId(): String = when {
+        rbProviderKimi.isChecked -> AgentSettingsStore.PROVIDER_KIMI
+        rbProviderMimo.isChecked -> AgentSettingsStore.PROVIDER_XIAOMI_MIMO
+        rbProviderCustom.isChecked -> AgentSettingsStore.PROVIDER_CUSTOM
+        else -> AgentSettingsStore.PROVIDER_DEEPSEEK
+    }
+
+    private fun selectedAuthMode(): AgentAuthMode =
+        if (rbAuthApiKey.isChecked) AgentAuthMode.API_KEY else AgentAuthMode.BEARER
+
+    private fun applySelectedPreset() {
+        val preset = AgentSettingsStore.providerPreset(selectedProviderId())
+        if (selectedProviderId() != AgentSettingsStore.PROVIDER_CUSTOM) {
+            etModel.setText(preset.defaultModel)
+            etBaseUrl.setText(preset.defaultBaseUrl)
+            rbAuthApiKey.isChecked = preset.defaultAuthMode == AgentAuthMode.API_KEY
+            rbAuthBearer.isChecked = preset.defaultAuthMode == AgentAuthMode.BEARER
         }
     }
 }

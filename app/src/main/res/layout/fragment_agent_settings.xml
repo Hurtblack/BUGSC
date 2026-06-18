@@ -41,6 +41,55 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:text="@string/agent_provider_label"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="13sp" />
+
+            <RadioGroup
+                android:id="@+id/rg_agent_provider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/rb_agent_provider_deepseek"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/agent_provider_deepseek"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_agent_provider_kimi"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agent_provider_kimi"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_agent_provider_mimo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agent_provider_mimo"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+
+                <RadioButton
+                    android:id="@+id/rb_agent_provider_custom"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agent_provider_custom"
+                    android:textColor="@color/sc_text"
+                    android:textSize="14sp" />
+            </RadioGroup>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:text="@string/agent_api_key_label"
                 android:textColor="@color/sc_text_mid"
                 android:textSize="13sp" />
@@ -60,26 +109,81 @@
                 android:textColorHint="@color/sc_text_dim"
                 android:textSize="14sp" />
 
-            <RadioGroup
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:text="@string/agent_model_label"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/et_agent_model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/input_bg"
+                android:hint="@string/agent_model_hint"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/agent_base_url_label"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/et_agent_base_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/input_bg"
+                android:hint="@string/agent_base_url_hint"
+                android:importantForAutofill="no"
+                android:inputType="textUri"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:textColor="@color/sc_text"
+                android:textColorHint="@color/sc_text_dim"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/agent_auth_label"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="13sp" />
+
+            <RadioGroup
+                android:id="@+id/rg_agent_auth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
                 android:orientation="vertical">
 
                 <RadioButton
-                    android:id="@+id/rb_agent_model_flash"
+                    android:id="@+id/rb_agent_auth_bearer"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:checked="true"
-                    android:text="@string/agent_model_flash"
+                    android:text="@string/agent_auth_bearer"
                     android:textColor="@color/sc_text"
                     android:textSize="14sp" />
 
                 <RadioButton
-                    android:id="@+id/rb_agent_model_pro"
+                    android:id="@+id/rb_agent_auth_api_key"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/agent_model_pro"
+                    android:text="@string/agent_auth_api_key"
                     android:textColor="@color/sc_text"
                     android:textSize="14sp" />
             </RadioGroup>
