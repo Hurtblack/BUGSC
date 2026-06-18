@@ -36,7 +36,8 @@ class ScmMarketClientTest {
             "thumbnailUrl": "https://example.com/thumb.png",
             "thumbnailUrlHd": "https://example.com/hd.png",
             "quantity": 1,
-            "unitPrice": 7000000.0
+            "unitPrice": 7000000.0,
+            "qualityData": "{\"type\":\"material\",\"quality\":850}"
           }]
         }],
         "total": 1
@@ -58,6 +59,63 @@ class ScmMarketClientTest {
         assertEquals("测试物品", order.itemName)
         assertEquals("特雷斯勒空间站", order.locationName)
         assertEquals(1, order.itemDetails.size)
+        assertEquals(850, order.itemDetails.single().quality)
+    }
+
+    @Test
+    fun parsePage_extractsQualityFromObjectQualityData() {
+        val json = JSONObject(
+            """
+            {
+              "code": 0,
+              "data": {
+                "list": [{
+                  "orderNumber": "Q1",
+                  "creatorType": 1,
+                  "itemName": "品质物品",
+                  "itemDetails": [{
+                    "itemId": "1",
+                    "itemName": "品质物品",
+                    "quantity": 1,
+                    "unitPrice": 1000,
+                    "qualityData": {"type":"material","quality":650}
+                  }]
+                }],
+                "total": 1
+              }
+            }
+            """.trimIndent(),
+        )
+
+        val item = ScmMarketClient.parsePage(json).list.single().itemDetails.single()
+
+        assertEquals(650, item.quality)
+    }
+
+    @Test
+    fun parsePage_usesPublicMaskedNicknameAsReturnedByBackend() {
+        val json = JSONObject(
+            """
+            {
+              "code": 0,
+              "data": {
+                "list": [{
+                  "orderNumber": "N1",
+                  "creatorType": 1,
+                  "creatorId": 300,
+                  "nickname": "U******e",
+                  "itemName": "测试物品",
+                  "itemDetails": []
+                }],
+                "total": 1
+              }
+            }
+            """.trimIndent(),
+        )
+
+        val order = ScmMarketClient.parsePage(json).list.single()
+
+        assertEquals("U******e", order.nickname)
     }
 
     @Test

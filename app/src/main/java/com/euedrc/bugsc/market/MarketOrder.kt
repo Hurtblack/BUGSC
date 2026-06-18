@@ -7,6 +7,7 @@ data class MarketOrderItem(
     val thumbnailUrlHd: String,
     val quantity: Int,
     val unitPrice: Double,
+    val quality: Int?,
 )
 
 data class MarketOrder(

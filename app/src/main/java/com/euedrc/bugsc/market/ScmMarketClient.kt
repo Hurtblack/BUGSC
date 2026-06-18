@@ -49,6 +49,7 @@ class ScmMarketClient {
                         thumbnailUrlHd = d.optString("thumbnailUrlHd"),
                         quantity = d.optInt("quantity", 1),
                         unitPrice = d.optDouble("unitPrice", 0.0),
+                        quality = parseQuality(d),
                     )
                 }
             } else emptyList()
@@ -76,6 +77,21 @@ class ScmMarketClient {
                 itemDetails = details,
             )
         }
+
+        private fun parseQuality(item: JSONObject): Int? {
+            val raw = item.opt("qualityData") ?: item.opt("qualityInfo") ?: return null
+            val quality = when (raw) {
+                is JSONObject -> raw.optIntOrNull("quality")
+                is String -> raw
+                    .takeIf { it.isNotBlank() && it != "null" }
+                    ?.let { runCatching { JSONObject(it).optIntOrNull("quality") }.getOrNull() }
+                else -> null
+            }
+            return quality?.takeIf { it in 0..1000 }
+        }
+
+        private fun JSONObject.optIntOrNull(name: String): Int? =
+            if (has(name) && !isNull(name)) optInt(name) else null
 
         private fun httpGet(url: String): String {
             val conn = URL(url).openConnection() as HttpURLConnection

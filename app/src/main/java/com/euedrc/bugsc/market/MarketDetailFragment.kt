@@ -394,10 +394,10 @@ class MarketDetailFragment : Fragment() {
     }
 
     private fun bindItemDetails(container: LinearLayout, order: MarketOrder) {
-        if (order.itemDetails.size <= 1) return
+        if (order.itemDetails.isEmpty()) return
         container.removeAllViews()
         container.addView(TextView(requireContext()).apply {
-            text = "包含商品（${order.itemDetails.size}）"
+            text = if (order.itemDetails.size == 1) "商品详情" else "包含商品（${order.itemDetails.size}）"
             textSize = 13f
             setTextColor(resources.getColor(R.color.sc_text, null))
         })
@@ -407,7 +407,8 @@ class MarketDetailFragment : Fragment() {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                 ).apply { topMargin = (6 * resources.displayMetrics.density).toInt() }
-                text = "${item.itemName}  ×${item.quantity}  ¤ ${formatPrice(item.unitPrice)} aUEC"
+                val quality = item.quality?.let { "  品质 $it" }.orEmpty()
+                text = "${item.itemName}  ×${item.quantity}  ¤ ${formatPrice(item.unitPrice)} aUEC$quality"
                 textSize = 12f
                 setTextColor(resources.getColor(R.color.sc_text_mid, null))
             }
