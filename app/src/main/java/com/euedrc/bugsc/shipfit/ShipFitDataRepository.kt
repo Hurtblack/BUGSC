@@ -12,6 +12,7 @@ data class ShipCard(
     val size: String?,
     val crew: String?,
     val cargo: String?,
+    val salePriceCents: Int? = null,
     val officialUrl: String?,
     val enginePortCount: Int,
     val engineSizeScore: Int,
@@ -91,6 +92,7 @@ class ShipFitDataRepository(private val context: Context) {
                 size = size,
                 crew = u?.optString("crew")?.takeIf { it.isNotBlank() && it != "0" },
                 cargo = u?.optString("scu")?.takeIf { it.isNotBlank() && it != "0" }?.let { "$it SCU" },
+                salePriceCents = u?.optInt("sale_price_cents")?.takeIf { it > 0 },
                 // TODO: 补齐缺失的官方链接（url_store 为空时建立人工映射/定期校验）。
                 officialUrl = u?.optString("url_store")?.takeIf { it.isNotBlank() },
                 enginePortCount = s.optInt("enginePortCount", 0),
@@ -492,6 +494,7 @@ class ShipFitDataRepository(private val context: Context) {
                 size = resolveSizeFromUex(u),
                 crew = cleanUexString(u, "crew")?.takeIf { it != "0" },
                 cargo = cleanUexString(u, "scu")?.takeIf { it != "0" }?.let { "$it SCU" },
+                salePriceCents = u.optInt("sale_price_cents").takeIf { it > 0 },
                 officialUrl = cleanUexString(u, "url_store"),
                 enginePortCount = 0,
                 engineSizeScore = 0,

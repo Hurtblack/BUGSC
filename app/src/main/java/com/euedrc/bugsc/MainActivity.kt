@@ -35,12 +35,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.navOptions
+import com.euedrc.bugsc.analytics.AnalyticsNames
 import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.chat.ChatClient
 import com.euedrc.bugsc.chat.ChatInboxSocket
 import com.euedrc.bugsc.chat.ChatLauncherBadgeNotifier
 import com.euedrc.bugsc.chat.ChatReconnectPolicy
 import com.euedrc.bugsc.chat.ChatUnreadStore
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.ui.MobiGlasBottomBar
 import com.euedrc.bugsc.ui.MobiGlasItem
 import kotlinx.coroutines.Dispatchers
@@ -80,7 +82,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        com.euedrc.bugsc.scm.ScmAuthStore.init(applicationContext)
+        com.euedrc.bugsc.data.DistributionServices.install(applicationContext)
         setContentView(R.layout.activity_main)
 
         val navHost = supportFragmentManager
@@ -99,13 +101,13 @@ class MainActivity : AppCompatActivity() {
             if (idx >= 0) {
                 selectedIndex = idx
                 barVisible = true
-                if (destination.id != lastTrackedDestinationId) {
-                    pageNameForDestination(destination.id)?.let { analytics().trackPageView(it) }
-                    lastTrackedDestinationId = destination.id
-                }
             } else {
                 // 钻进二级页时隐藏底部栏，避免遮挡
                 barVisible = false
+            }
+            if (destination.id != lastTrackedDestinationId) {
+                AnalyticsNames.pageNameForDestination(destination.id)?.let { analytics().trackPageView(it) }
+                lastTrackedDestinationId = destination.id
             }
         }
 
@@ -144,16 +146,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            com.euedrc.bugsc.scm.ScmAuthStore.loginState.collectLatest { loggedIn ->
-                if (loggedIn && foreground) {
-                    startInboxSocket()
-                } else if (!loggedIn) {
-                    stopInboxSocket()
-                    ChatUnreadStore.clear()
-                }
-            }
-        }
-        lifecycleScope.launch {
             ChatUnreadStore.count.collectLatest { count ->
                 ChatLauncherBadgeNotifier.sync(this@MainActivity, count)
             }
@@ -163,7 +155,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         foreground = true
-        if (com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) {
+        if (AppServices.auth.isLoggedIn()) {
             ensureChatNotificationPermission()
             lifecycleScope.launch(Dispatchers.IO) { runCatching { ChatUnreadStore.refresh() } }
             startInboxSocket()
@@ -177,7 +169,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startInboxSocket() {
-        if (!foreground || !com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn || inboxSocket != null || inboxConnecting) return
+        if (!foreground || !AppServices.auth.isLoggedIn() || inboxSocket != null || inboxConnecting) return
         inboxConnecting = true
         inboxReconnectJob?.cancel()
         lifecycleScope.launch {
@@ -191,7 +183,7 @@ class MainActivity : AppCompatActivity() {
                 scheduleInboxReconnect()
                 return@launch
             }
-            if (!foreground || !com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) {
+            if (!foreground || !AppServices.auth.isLoggedIn()) {
                 inboxConnecting = false
                 return@launch
             }
@@ -218,7 +210,7 @@ class MainActivity : AppCompatActivity() {
     private fun scheduleInboxReconnect() {
         if (!reconnectPolicy.shouldReconnect(
                 foreground = foreground,
-                loggedIn = com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn,
+                loggedIn = AppServices.auth.isLoggedIn(),
                 attempt = reconnectAttempt,
             )
         ) return
@@ -338,12 +330,4 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun analytics(): AnalyticsTracker = AnalyticsTracker.get(this)
-
-    private fun pageNameForDestination(destId: Int): String? = when (destId) {
-        R.id.ToolsFragment -> "tools"
-        R.id.NewsFragment -> "news"
-        R.id.QueryFragment -> "query"
-        R.id.ProfileFragment -> "profile"
-        else -> null
-    }
 }

@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,6 +89,7 @@ class MiningFragment : Fragment() {
         for ((key, label) in RARITY_CHIPS) {
             val tv = makeChip(label, isSelected = (key == selectedRarity))
             tv.setOnClickListener {
+                track("rarity_filter")
                 selectedRarity = key
                 buildChips()
                 applyFilter()
@@ -223,6 +225,7 @@ class MiningFragment : Fragment() {
         card.addView(detail)
 
         card.setOnClickListener {
+            track("toggle_detail")
             if (expanded.remove(e.guid)) {
                 detail.visibility = View.GONE
                 detail.removeAllViews()
@@ -406,6 +409,10 @@ class MiningFragment : Fragment() {
 
     private fun dp(v: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("mining", feature)
+    }
 
     private fun rarityLabel(r: String?): String = when (r) {
         "legendary" -> "传说"

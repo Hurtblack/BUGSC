@@ -194,6 +194,28 @@ class ScmAgentToolsTest {
         }
     }
 
+    private class PagedMarketGateway : ScmAgentGateway {
+        val requestedLimits = mutableListOf<Int>()
+
+        override fun request(path: String): JSONObject = JSONObject("""{"code":0,"data":{"list":[]}}""")
+        override fun searchItems(keyword: String): List<ItemSearchResult> = emptyList()
+        override fun searchOrders(keyword: String): List<MarketOrder> = emptyList()
+        override fun searchOrderResults(keyword: String, creatorType: Int?, limit: Int): ScmMarketSearchResult {
+            requestedLimits += limit
+            return ScmMarketSearchResult(
+                orders = (1..limit).map { index ->
+                    marketOrder(
+                        itemName = "科粒晶-$index",
+                        creatorType = creatorType ?: 1,
+                        unitPrice = 1000.0 + index,
+                        nickname = "seller$index",
+                    )
+                },
+                total = 8,
+            )
+        }
+    }
+
     @Test
     fun scmBlueprintToolFormatsChineseFirstFacts() = runBlocking {
         val tool = ScmBlueprintSearchTool(FakeGateway())
@@ -355,6 +377,26 @@ class ScmAgentToolsTest {
         assertTrue(result.summary.contains("1500"))
         assertTrue(result.summary.contains("洛维尔"))
         assertTrue(result.facts.any { it.label == "卖家数量" && it.value == "2" })
+    }
+
+    @Test
+    fun marketToolSupportsPageAndLimitWithoutOnlyShowingFirstFiveOrders() = runBlocking {
+        val gateway = PagedMarketGateway()
+        val tool = ScmMarketOrderSearchTool(gateway)
+
+        val result = tool.run(
+            AgentToolCall(
+                "search_market",
+                mapOf("query" to "科粒晶", "side" to "sell", "page" to "2", "limit" to "3"),
+            ),
+        )
+
+        assertEquals(listOf(6), gateway.requestedLimits)
+        assertTrue(result.summary.contains("第 2 页"))
+        assertTrue(result.summary.contains("科粒晶-4"))
+        assertTrue(result.summary.contains("科粒晶-6"))
+        assertTrue(!result.summary.contains("科粒晶-1"))
+        assertTrue(result.summary.contains("还有 2 条未显示"))
     }
 
     @Test

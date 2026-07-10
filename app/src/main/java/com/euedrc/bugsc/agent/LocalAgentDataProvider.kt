@@ -9,6 +9,36 @@ import com.euedrc.bugsc.shipfit.ShipCard
 import com.euedrc.bugsc.shipfit.ShipFitDataRepository
 import com.euedrc.bugsc.wikelo.WikeloRepository
 
+object AgentShipSearchFormatter {
+    fun hit(ship: ShipCard, score: Int): AgentSearchHit =
+        AgentSearchHit(
+            summary = buildString {
+                append(ship.zhName ?: ship.name).append(" / ").append(ship.name)
+                ship.salePriceCents?.let { append("，售卖价 ").append(formatUsdPrice(it)) }
+                ship.size?.let { append("，尺寸 ").append(it) }
+                ship.crew?.let { append("，船员 ").append(it) }
+                ship.cargo?.let { append("，货仓 ").append(it) }
+                append("，武器/组件槽位 ").append(ship.slots.size).append(" 个")
+            },
+            facts = listOfNotNull(
+                AgentFact("船只", ship.zhName ?: ship.name),
+                ship.salePriceCents?.let { AgentFact("售卖价", formatUsdPrice(it)) },
+                ship.size?.let { AgentFact("尺寸", it) },
+                ship.crew?.let { AgentFact("船员", it) },
+                ship.cargo?.let { AgentFact("货仓", it) },
+                AgentFact("槽位数量", ship.slots.size.toString()),
+            ),
+            sources = listOf(AgentSource("shipfit assets", "local", ship.id)),
+            confidence = confidenceForScore(score),
+        )
+
+    private fun formatUsdPrice(cents: Int): String =
+        if (cents % 100 == 0) "$${cents / 100}" else "$${"%.2f".format(cents / 100.0)}"
+
+    private fun confidenceForScore(score: Int): Float =
+        (0.5f + score.coerceAtMost(10) / 20f).coerceAtMost(0.95f)
+}
+
 class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
     private val appContext = context.applicationContext
 
@@ -113,26 +143,8 @@ class LocalAgentDataProvider(context: Context) : AgentSearchProvider {
             .filter { it.second > 0 || query.entities.any { entity -> entity.type == "ship" && entity.value == it.first.id } }
             .sortedByDescending { it.second }
             .take(3)
-            .map { (ship, score) ->
-                AgentSearchHit(
-                    summary = buildString {
-                        append(ship.zhName ?: ship.name).append(" / ").append(ship.name)
-                        ship.size?.let { append("，尺寸 ").append(it) }
-                        ship.crew?.let { append("，船员 ").append(it) }
-                        ship.cargo?.let { append("，货仓 ").append(it) }
-                        append("，武器/组件槽位 ").append(ship.slots.size).append(" 个")
-                    },
-                    facts = listOfNotNull(
-                        AgentFact("船只", ship.zhName ?: ship.name),
-                        ship.size?.let { AgentFact("尺寸", it) },
-                        ship.crew?.let { AgentFact("船员", it) },
-                        ship.cargo?.let { AgentFact("货仓", it) },
-                        AgentFact("槽位数量", ship.slots.size.toString()),
-                    ),
-                    sources = listOf(AgentSource("shipfit assets", "local", ship.id)),
-                    confidence = confidence(score),
-                )
-            }.toList()
+            .map { (ship, score) -> AgentShipSearchFormatter.hit(ship, score) }
+            .toList()
 
     private fun searchMining(query: AgentQuery): List<AgentSearchHit> =
         miningMatches(query).take(3).map { element ->

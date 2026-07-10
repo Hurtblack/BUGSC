@@ -23,7 +23,7 @@ data class MarketOrder(
     val nickname: String,
     val avatar: String,
     val point: Int,
-    /** 1=在线 2=游戏中 3=隐身 0=离线（flowcld creatorStatus） */
+    /** 1=在线 2=游戏中 3=隐身 0=离线。 */
     val creatorStatus: Int,
     val itemName: String,
     val locationName: String,

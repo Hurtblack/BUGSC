@@ -1,6 +1,5 @@
 package com.euedrc.bugsc
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -11,7 +10,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import androidx.core.net.toUri
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +26,7 @@ class ToolsFragment : Fragment() {
     private var cardAgent: LinearLayout? = null
     private var cardTimer: LinearLayout? = null
     private var cardWb: LinearLayout? = null
+    private var cardWbccuChain: LinearLayout? = null
     private var cardRepair: LinearLayout? = null
     private var cardComing: LinearLayout? = null
     private var tvStatusPlatformDot: TextView? = null
@@ -44,6 +43,7 @@ class ToolsFragment : Fragment() {
         cardBug = view.findViewById(R.id.card_bug)
         cardTimer = view.findViewById(R.id.card_timer)
         cardWb = view.findViewById(R.id.card_wb)
+        cardWbccuChain = view.findViewById(R.id.card_wbccu_chain)
         cardRepair = view.findViewById(R.id.card_repair)
         cardComing = view.findViewById(R.id.card_coming)
         tvStatusPlatformDot = view.findViewById(R.id.tv_status_platform_dot)
@@ -67,17 +67,17 @@ class ToolsFragment : Fragment() {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "daily_wb")
             findNavController().navigate(R.id.WbFragment)
         }
+        cardWbccuChain?.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "wbccu_chain")
+            findNavController().navigate(R.id.WbccuChainFragment)
+        }
         cardRepair?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "character_repair")
             findNavController().navigate(R.id.CharacterRepairFragment)
         }
         cardComing?.setOnClickListener {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("tools", "more_tools")
-            runCatching {
-                startActivity(Intent(Intent.ACTION_VIEW, SCM_TOOLS_URL.toUri()))
-            }.onFailure {
-                Toast.makeText(requireContext(), "无法打开浏览器", Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(requireContext(), "当前构建未启用 SCM 网站工具栏", Toast.LENGTH_SHORT).show()
         }
 
         loadServerStatus()
@@ -89,16 +89,12 @@ class ToolsFragment : Fragment() {
         cardBug = null
         cardTimer = null
         cardWb = null
+        cardWbccuChain = null
         cardRepair = null
         cardComing = null
         tvStatusPlatformDot = null
         tvStatusPuDot = null
         tvStatusAcDot = null
-    }
-
-    companion object {
-        /** SCM 网站工具栏（合作方维护） */
-        private const val SCM_TOOLS_URL = "https://flowcld.xyz/tools"
     }
 
     private fun loadServerStatus() {

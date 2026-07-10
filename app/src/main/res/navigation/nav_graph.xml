@@ -144,6 +144,12 @@
         tools:layout="@layout/fragment_wb" />
 
     <fragment
+        android:id="@+id/WbccuChainFragment"
+        android:name="com.euedrc.bugsc.wbccu.WbccuChainFragment"
+        android:label="WBCCU 链路"
+        tools:layout="@layout/fragment_wbccu_chain" />
+
+    <fragment
         android:id="@+id/MarketFragment"
         android:name="com.euedrc.bugsc.market.MarketFragment"
         android:label="SCM 市场"

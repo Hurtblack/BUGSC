@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.blueprint.BlueprintDataRepository
 import com.euedrc.bugsc.blueprint.MissionDetailSheet
 import com.euedrc.bugsc.blueprint.RewardMission
@@ -65,9 +66,13 @@ class MissionQueryFragment : Fragment() {
         tvEmpty = view.findViewById(R.id.tv_empty)
         containerList = view.findViewById(R.id.container_list)
 
-        btnSearch.setOnClickListener { applyFilters() }
+        btnSearch.setOnClickListener {
+            track("search")
+            applyFilters()
+        }
         etSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                track("search")
                 applyFilters()
                 true
             } else {
@@ -113,6 +118,7 @@ class MissionQueryFragment : Fragment() {
         systemChips.removeAllViews()
         systems.forEach { value ->
             systemChips.addView(buildFilterChip(value, selectedSystem == value) {
+                track("filter_system")
                 selectedSystem = value
                 setupFilterChips()
                 applyFilters()
@@ -122,6 +128,7 @@ class MissionQueryFragment : Fragment() {
         factionChips.removeAllViews()
         factions.forEach { value ->
             factionChips.addView(buildFilterChip(value, selectedFaction == value) {
+                track("filter_faction")
                 selectedFaction = value
                 setupFilterChips()
                 applyFilters()
@@ -193,6 +200,7 @@ class MissionQueryFragment : Fragment() {
             isClickable = true
             isFocusable = true
             setOnClickListener {
+                track("open_detail")
                 MissionDetailSheet.newInstance(mission.guid).show(parentFragmentManager, "mission_detail")
             }
         }
@@ -219,6 +227,10 @@ class MissionQueryFragment : Fragment() {
         }
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("mission_query", feature)
+    }
 
     companion object {
         private const val FILTER_ALL = "__all__"

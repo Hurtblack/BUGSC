@@ -1,21 +1,30 @@
 package com.euedrc.bugsc
 
+import android.app.AlertDialog
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.text.InputType
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -61,6 +70,7 @@ class InventoryFragment : Fragment() {
     private var inventoryItems: List<InventoryItem> = emptyList()
     private var currentDisplayPage = 0
     private val shipAliases by lazy { loadShipAliases() }
+    private val shipPrices by lazy { loadShipPrices() }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         return inflater.inflate(R.layout.fragment_inventory, container, false)
@@ -99,11 +109,16 @@ class InventoryFragment : Fragment() {
         loadUserProfile(forceRefresh = false)
         showCachedInventoryOrFetch()
 
-        btnRefresh.setOnClickListener { fetchInventory(forceRefresh = true) }
+        btnRefresh.setOnClickListener {
+            track("refresh")
+            fetchInventory(forceRefresh = true)
+        }
         btnPrevPage.setOnClickListener {
+            track("prev_page")
             if (currentDisplayPage > 0) { currentDisplayPage--; renderCurrentPage() }
         }
         btnNextPage.setOnClickListener {
+            track("next_page")
             if (currentDisplayPage < totalDisplayPages() - 1) { currentDisplayPage++; renderCurrentPage() }
         }
     }
@@ -256,6 +271,8 @@ class InventoryFragment : Fragment() {
         val display = InventoryDisplayFormatter.format(item, shipAliases)
         val card = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
+            isClickable = true
+            isFocusable = true
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -265,6 +282,10 @@ class InventoryFragment : Fragment() {
             }
             setBackgroundColor(Color.parseColor("#111d2b"))
             setPadding(8.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
+            setOnClickListener {
+                track("open_item_detail")
+                showItemDetailDialog(item)
+            }
         }
 
         val image = ImageView(requireContext()).apply {
@@ -305,8 +326,14 @@ class InventoryFragment : Fragment() {
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = 6.dpToPx() }
         }
-        priceRow.addView(priceBlock("可融价值", item.priceCents))
-        priceRow.addView(priceBlock("当前价格", item.currentPriceCents))
+        val ccuSummary = ccuSummary(item)
+        if (ccuSummary != null) {
+            priceRow.addView(priceBlock("可融/实付", item.priceCents))
+            priceRow.addView(priceBlock("标准差价", ccuSummary.standardUpgradeValueCents))
+            priceRow.addView(priceBlock("WB省", ccuSummary.savingCents))
+        } else {
+            priceRow.addView(priceBlock("可融价值", item.priceCents))
+        }
         content.addView(priceRow)
 
         val tags = display.tags.joinToString("  ·  ")
@@ -324,10 +351,356 @@ class InventoryFragment : Fragment() {
         return card
     }
 
+    private fun showItemDetailDialog(item: InventoryItem) {
+        val display = InventoryDisplayFormatter.format(item, shipAliases)
+        val ccuSummary = ccuSummary(item)
+        val root = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(14.dpToPx(), 14.dpToPx(), 14.dpToPx(), 8.dpToPx())
+            setBackgroundColor(Color.parseColor("#07111c"))
+        }
+
+        root.addView(detailHeader(display.title, item))
+        if (ccuSummary != null) {
+            root.addView(sectionPanel("CCU 价格分析").apply {
+                addView(routeLine(
+                    "${ccuSummary.fromShipName}（${priceText(ccuSummary.fromShipPriceCents)}）",
+                    "${ccuSummary.toShipName}（${priceText(ccuSummary.toShipPriceCents)}）"
+                ))
+                addView(metricGrid(listOf(
+                    "当前可融" to priceText(item.priceCents),
+                    "WB省钱" to savingText(ccuSummary.savingCents),
+                )))
+            })
+        } else {
+            root.addView(sectionPanel("价格").apply {
+                addView(metricGrid(listOf("可融价值" to priceText(item.priceCents))))
+            })
+        }
+
+        root.addView(sectionPanel("基本信息").apply {
+            addView(detailLine("物品 ID", item.id))
+            addView(detailLine("状态", item.status.ifBlank { "-" }))
+            addView(detailLine("创建时间", item.date.ifBlank { "-" }))
+            if (item.insurance.isNotBlank()) addView(detailLine("保险", item.insurance))
+            if (display.subtitle.isNotBlank()) addView(detailLine("原名", display.subtitle))
+            if (display.detail.isNotBlank()) addView(detailLine("包含", display.detail.removePrefix("包含：")))
+            if (item.upgradeData.isNotBlank()) addView(detailLine("升级数据", "已识别 CCU 数据"))
+        })
+
+        if (item.subItems.isNotEmpty()) {
+            root.addView(sectionPanel("子物品").apply {
+                item.subItems.forEach { subItem ->
+                    val subtitle = listOf(subItem.kind, subItem.subtitle)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                    addView(detailLine(subItem.title, subtitle.ifBlank { "详情项" }))
+                }
+            })
+        }
+
+        root.addView(sectionPanel("操作").apply {
+            addView(actionButton("融解为 Store Credit", item.canReclaim, ActionTone.DANGER) {
+                track("open_reclaim")
+                showReclaimDialog(item)
+            })
+            addView(actionButton("赠送给邮箱", item.canGift, ActionTone.PRIMARY) {
+                track("open_gift")
+                showGiftDialog(item)
+            })
+            addView(actionButton("撤回未领取礼物", item.status.contains("gift", ignoreCase = true), ActionTone.SECONDARY) {
+                track("open_cancel_gift")
+                showCancelGiftDialog(item)
+            })
+        })
+
+        val scroll = ScrollView(requireContext()).apply {
+            addView(root)
+        }
+        val dialog = AlertDialog.Builder(requireContext())
+            .setView(scroll)
+            .setNegativeButton("关闭", null)
+            .show()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.parseColor("#07111c")))
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(Color.parseColor("#21d4ff"))
+    }
+
+    private fun showReclaimDialog(item: InventoryItem) {
+        val passwordInput = passwordInput()
+        AlertDialog.Builder(requireContext())
+            .setTitle("确认融解")
+            .setMessage("融解后该 pledge 会从机库移除，并转换为 RSI Store Credit。该操作通常不可逆，请确认物品 ID：${item.id}")
+            .setView(passwordInput)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确认融解") { _, _ ->
+                val password = passwordInput.text.toString()
+                if (password.isBlank()) {
+                    toast("请输入 RSI 当前密码")
+                    return@setPositiveButton
+                }
+                performInventoryAction("融解") {
+                    client.reclaimPledge(item.id, password)
+                }
+            }
+            .show()
+    }
+
+    private fun showGiftDialog(item: InventoryItem) {
+        val form = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 8.dpToPx(), 0, 0)
+        }
+        val nameInput = EditText(requireContext()).apply {
+            hint = "目标称呼"
+            setText("SCMobiGlas 用户")
+            setSingleLine(true)
+        }
+        val emailInput = EditText(requireContext()).apply {
+            hint = "目标邮箱"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            setSingleLine(true)
+        }
+        val passwordInput = passwordInput()
+        form.addView(nameInput)
+        form.addView(emailInput)
+        form.addView(passwordInput)
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("确认赠送")
+            .setMessage("赠送后收件人领取即不可撤回。请确认目标邮箱和物品 ID：${item.id}")
+            .setView(form)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确认赠送") { _, _ ->
+                val name = nameInput.text.toString().ifBlank { "SCMobiGlas 用户" }
+                val email = emailInput.text.toString().trim()
+                val password = passwordInput.text.toString()
+                if (email.isBlank() || password.isBlank()) {
+                    toast("请输入目标邮箱和 RSI 当前密码")
+                    return@setPositiveButton
+                }
+                performInventoryAction("赠送") {
+                    client.giftPledge(item.id, password, email, name)
+                }
+            }
+            .show()
+    }
+
+    private fun showCancelGiftDialog(item: InventoryItem) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("撤回未领取礼物")
+            .setMessage("仅未被领取的礼物可以撤回。确认撤回物品 ID：${item.id}？")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确认撤回") { _, _ ->
+                performInventoryAction("撤回礼物") {
+                    client.cancelGift(item.id)
+                }
+            }
+            .show()
+    }
+
+    private fun performInventoryAction(
+        label: String,
+        action: () -> RsiAccountActionResult
+    ) {
+        tvStatus.text = "正在执行 $label..."
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { action() }
+            }
+            result.onSuccess { actionResult ->
+                if (actionResult.success) {
+                    toast("$label 成功")
+                    fetchInventory(forceRefresh = true)
+                } else {
+                    showError("$label 失败：${actionResult.message}")
+                    tvStatus.text = "$label 失败"
+                }
+            }.onFailure { error ->
+                Log.e(TAG, "$label fail", error)
+                tvStatus.text = "$label 失败"
+                showError(error.message ?: "$label 失败")
+            }
+        }
+    }
+
+    private enum class ActionTone { PRIMARY, SECONDARY, DANGER }
+
+    private fun actionButton(label: String, enabled: Boolean, tone: ActionTone, onClick: () -> Unit): Button {
+        val color = when {
+            !enabled -> "#223142"
+            tone == ActionTone.DANGER -> "#ff5a66"
+            tone == ActionTone.PRIMARY -> "#21d4ff"
+            else -> "#2e4860"
+        }
+        val textColor = if (enabled && tone == ActionTone.PRIMARY) "#061019" else "#d8eaf2"
+        return Button(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 8.dpToPx() }
+            text = if (enabled) label else "$label（不可用）"
+            isEnabled = enabled
+            backgroundTintList = ColorStateList.valueOf(Color.parseColor(color))
+            setTextColor(Color.parseColor(if (enabled) textColor else "#7c95a8"))
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun detailLine(label: String, value: String): TextView {
+        return TextView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 6.dpToPx() }
+            text = "$label：$value"
+            textSize = 13f
+            setTextColor(Color.parseColor("#d8eaf2"))
+        }
+    }
+
+    private fun detailHeader(title: String, item: InventoryItem): LinearLayout {
+        return LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedBg("#0d1b2a", "#25475a")
+            setPadding(12.dpToPx(), 12.dpToPx(), 12.dpToPx(), 12.dpToPx())
+            addView(TextView(requireContext()).apply {
+                text = title
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.parseColor("#f2fbff"))
+            })
+            addView(TextView(requireContext()).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 4.dpToPx() }
+                text = listOf(item.status.ifBlank { "未知状态" }, "ID ${item.id}")
+                    .joinToString(" · ")
+                textSize = 12f
+                setTextColor(Color.parseColor("#8fb3c4"))
+            })
+        }
+    }
+
+    private fun sectionPanel(title: String): LinearLayout {
+        return LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 10.dpToPx() }
+            background = roundedBg("#0b1724", "#1e3545")
+            setPadding(10.dpToPx(), 10.dpToPx(), 10.dpToPx(), 10.dpToPx())
+            addView(sectionTitle(title).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            })
+        }
+    }
+
+    private fun routeLine(from: String, to: String): TextView {
+        return TextView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 8.dpToPx() }
+            text = "$from  →  $to"
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#f2fbff"))
+        }
+    }
+
+    private fun metricGrid(metrics: List<Pair<String, String>>): LinearLayout {
+        return LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 8.dpToPx() }
+            metrics.chunked(2).forEach { rowMetrics ->
+                addView(LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = 6.dpToPx() }
+                    rowMetrics.forEach { (label, value) ->
+                        addView(metricBox(label, value))
+                    }
+                    if (rowMetrics.size == 1) {
+                        addView(View(requireContext()).apply {
+                            layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+                        })
+                    }
+                })
+            }
+        }
+    }
+
+    private fun metricBox(label: String, value: String): LinearLayout {
+        return LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                leftMargin = 3.dpToPx()
+                rightMargin = 3.dpToPx()
+            }
+            background = roundedBg("#102234", "#203a4a")
+            setPadding(8.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
+            addView(TextView(requireContext()).apply {
+                text = label
+                textSize = 11f
+                setTextColor(Color.parseColor("#7c95a8"))
+            })
+            addView(TextView(requireContext()).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 2.dpToPx() }
+                text = value
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.parseColor(if (value.startsWith("+")) "#64f0a6" else "#21d4ff"))
+            })
+        }
+    }
+
+    private fun roundedBg(fill: String, stroke: String): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 8.dpToPx().toFloat()
+            setColor(Color.parseColor(fill))
+            setStroke(1.dpToPx(), Color.parseColor(stroke))
+        }
+    }
+
+    private fun sectionTitle(title: String): TextView {
+        return TextView(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 14.dpToPx() }
+            text = title
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#21d4ff"))
+        }
+    }
+
+    private fun passwordInput(): EditText {
+        return EditText(requireContext()).apply {
+            hint = "RSI 当前密码"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+    }
+
     private fun priceBlock(label: String, cents: Int): TextView {
         return TextView(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            text = "$label\n${priceText(cents)}"
+            text = "$label\n${if (label.contains("省")) savingText(cents) else priceText(cents)}"
             textSize = 12f
             setTextColor(Color.parseColor("#21d4ff"))
             typeface = Typeface.DEFAULT_BOLD
@@ -501,6 +874,22 @@ class InventoryFragment : Fragment() {
         out
     }.getOrDefault(emptyMap())
 
+    private fun loadShipPrices(): List<InventoryShipPrice> = runCatching {
+        val root = requireContext().assets.open("shipfit/rsi_ship_prices.json")
+            .bufferedReader().use { it.readText() }
+            .let { JSONObject(it) }
+        val ships = root.optJSONArray("ships") ?: return@runCatching emptyList()
+        val out = ArrayList<InventoryShipPrice>()
+        for (i in 0 until ships.length()) {
+            val ship = ships.optJSONObject(i) ?: continue
+            val name = ship.optString("name")
+            val price = ship.optInt("sale_price_cents", 0)
+            val id = ship.optInt("id").takeIf { it > 0 }
+            if (name.isNotBlank() && price > 0) out += InventoryShipPrice(id, name, price)
+        }
+        InventoryShipPriceAliases.expand(out, shipAliases)
+    }.getOrDefault(emptyList())
+
     private fun saveProfile(profile: RsiUserProfile) {
         prefs.edit()
             .putString(KEY_PROFILE_NAME, profile.displayName)
@@ -532,12 +921,33 @@ class InventoryFragment : Fragment() {
         return "$${"%.2f".format(Locale.US, cents / 100.0)}"
     }
 
+    private fun savingText(cents: Int): String {
+        return when {
+            cents > 0 -> "+${priceText(cents)}"
+            cents == 0 -> "-"
+            else -> "-${priceText(-cents)}"
+        }
+    }
+
+    private fun ccuSummary(item: InventoryItem): InventoryCcuPriceSummary? {
+        val ccuInfo = item.ccuInfo ?: return null
+        return InventoryCcuPriceCalculator.summarize(item, ccuInfo, shipPrices)
+    }
+
     private fun formatDateTime(date: Date): String {
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         return sdf.format(date)
     }
 
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("inventory", feature)
+    }
+
+    private fun toast(message: String) {
+        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+    }
 
     override fun onDestroyView() {
         requestCountdownJob?.cancel()
@@ -562,6 +972,6 @@ class InventoryFragment : Fragment() {
         private const val KEY_PROFILE_NAME = "inventoryProfileName"
         private const val KEY_PROFILE_HANDLE = "inventoryProfileHandle"
         private const val KEY_PROFILE_AVATAR = "inventoryProfileAvatar"
-        private const val CACHE_VERSION = 2
+        private const val CACHE_VERSION = 4
     }
 }

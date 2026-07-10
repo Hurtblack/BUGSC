@@ -91,6 +91,19 @@ class AppUtilityToolsTest {
         )
     }
 
+    private class LargeRsiInventoryProvider : RsiInventoryProvider {
+        override fun lastSync(): String = "2026-06-18 11:20:00"
+        override fun shipAliases(): Map<String, String> = emptyMap()
+        override fun loadItems(): List<InventoryItem> =
+            (1..60).map { index ->
+                inventoryItem(
+                    name = "Standalone Ship $index",
+                    priceCents = index * 100,
+                    page = index,
+                )
+            }
+    }
+
     private class RecordingRsiStatusProvider : SyncableRsiServerStatusProvider {
         val calls = mutableListOf<String>()
 
@@ -264,6 +277,17 @@ class AppUtilityToolsTest {
 
         assertTrue(result.summary.contains("Railen Paint Pack"))
         assertTrue(result.summary.contains("皮肤"))
+    }
+
+    @Test
+    fun rsiInventoryToolAllowsLargeExplicitLimitAndReportsRemainingItems() = runBlocking {
+        val tool = RsiInventoryTool(LargeRsiInventoryProvider())
+
+        val result = tool.run(AgentToolCall("get_rsi_inventory", mapOf("limit" to "50")))
+
+        assertTrue(result.summary.contains("Standalone Ship 50"))
+        assertTrue(!result.summary.contains("Standalone Ship 51"))
+        assertTrue(result.summary.contains("还有 10 项未显示"))
     }
 
     private companion object {

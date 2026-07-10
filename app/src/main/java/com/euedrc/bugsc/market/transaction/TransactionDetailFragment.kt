@@ -12,8 +12,9 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.requireScmLogin
-import com.euedrc.bugsc.scm.ScmAuthStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -21,7 +22,7 @@ import java.text.NumberFormat
 import java.util.Locale
 
 class TransactionDetailFragment : Fragment() {
-    private val client = TransactionClient()
+    private val transactions get() = AppServices.transactions
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, state: Bundle?): View =
         inflater.inflate(R.layout.fragment_transaction_detail, container, false)
@@ -38,9 +39,13 @@ class TransactionDetailFragment : Fragment() {
     private fun load(view: View, transactionNumber: String) {
         val status = view.findViewById<TextView>(R.id.tv_transaction_detail_status)
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { client.get(transactionNumber) } }
+            val result = withContext(Dispatchers.IO) { runCatching { transactions.get(transactionNumber) } }
             result.onFailure { status.text = "加载失败：${it.message ?: "网络错误"}" }
                 .onSuccess { record ->
+                    if (record == null) {
+                        status.text = "未找到交易详情"
+                        return@onSuccess
+                    }
                     status.visibility = View.GONE
                     view.findViewById<View>(R.id.container_transaction_detail).visibility = View.VISIBLE
                     view.findViewById<TextView>(R.id.tv_transaction_item).text = record.itemsName.ifBlank { "交易订单" }
@@ -72,13 +77,14 @@ class TransactionDetailFragment : Fragment() {
         val deliver = view.findViewById<Button>(R.id.btn_transaction_deliver)
         cancel.visibility = View.GONE
         deliver.visibility = View.GONE
-        val currentUserId = if (ScmAuthStore.isLoggedIn) ScmAuthStore.session().userId else 0L
+        val currentUserId = if (AppServices.auth.isLoggedIn()) AppServices.auth.currentUserId() else 0L
         val actions = TransactionActionPolicy.visibleActions(record, currentUserId)
         container.visibility = if (actions.isEmpty()) View.GONE else View.VISIBLE
 
         if (TransactionAction.CANCEL in actions) {
             cancel.visibility = View.VISIBLE
             cancel.setOnClickListener {
+                track("cancel_transaction")
                 confirmStatusUpdate(
                     view = view,
                     title = "取消交易",
@@ -92,6 +98,7 @@ class TransactionDetailFragment : Fragment() {
         if (TransactionAction.DELIVER in actions) {
             deliver.visibility = View.VISIBLE
             deliver.setOnClickListener {
+                track("deliver_transaction")
                 confirmStatusUpdate(
                     view = view,
                     title = "交付货物",
@@ -125,7 +132,7 @@ class TransactionDetailFragment : Fragment() {
     private fun updateStatus(view: View, transactionNumber: String, deliveryStatus: Int, successMessage: String) {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { client.updateStatus(transactionNumber, deliveryStatus) }
+                runCatching { transactions.updateStatus(transactionNumber, deliveryStatus) }
             }
             result.onFailure {
                 Toast.makeText(requireContext(), it.message ?: "状态更新失败", Toast.LENGTH_LONG).show()
@@ -146,6 +153,10 @@ class TransactionDetailFragment : Fragment() {
         3 -> "已收货"
         4 -> "已取消"
         else -> "未知"
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("transaction_detail", feature)
     }
 
     private companion object {

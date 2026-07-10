@@ -15,6 +15,7 @@ UEX Corp API 2.0 飞船配装数据导出工具。
 import argparse
 import json
 import os
+import re
 import ssl
 import time
 import urllib.request
@@ -84,6 +85,52 @@ def fetch_ships():
     return ships
 
 
+def normalize_ship_name(name):
+    if not name:
+        return ""
+    text = name.lower()
+    text = text.replace("&", " and ")
+    text = re.sub(r"\b(anvil|crusader|aegis|drake|rsi|misc|origin|esperia|gatac|argo|tumbril|greycat|kruger)\b", " ", text)
+    text = re.sub(r"\bmk\s+i\b", "", text)
+    text = re.sub(r"\b(mk|mark)\s+([ivx]+|\d+)\b", r"\2", text)
+    text = re.sub(r"\bstarlifter\b", " ", text)
+    text = re.sub(r"\btank\b", " ", text)
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return " ".join(text.split())
+
+
+def load_sale_prices(path):
+    if not path or not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+    return doc.get("ships") or []
+
+
+def apply_sale_prices(ships, prices):
+    by_name = {}
+    for row in prices:
+        price = row.get("sale_price_cents")
+        if not isinstance(price, int):
+            continue
+        key = normalize_ship_name(row.get("name"))
+        if key:
+            by_name[key] = price
+
+    matched = 0
+    for ship in ships:
+        candidates = [
+            normalize_ship_name(ship.get("name")),
+            normalize_ship_name(ship.get("name_full")),
+        ]
+        price = next((by_name[k] for k in candidates if k in by_name), None)
+        if price is None:
+            continue
+        ship["sale_price_cents"] = price
+        matched += 1
+    return matched
+
+
 def fetch_components():
     components = []
     for cid, ctype in COMPONENT_CATEGORIES.items():
@@ -111,12 +158,19 @@ def fetch_components():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="app/src/main/assets/shipfit")
+    ap.add_argument("--prices", default="app/src/main/assets/shipfit/rsi_ship_prices.json")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
     print("[1/2] 抓取飞船列表 ...")
     ships = fetch_ships()
     print(f"      {len(ships)} 艘")
+    prices = load_sale_prices(args.prices)
+    if prices:
+        matched = apply_sale_prices(ships, prices)
+        print(f"      合并 RSI 售卖价: {matched} 艘")
+    else:
+        print("      未找到 RSI 售卖价快照，跳过 sale_price_cents")
 
     print("[2/2] 抓取组件列表 ...")
     components = fetch_components()

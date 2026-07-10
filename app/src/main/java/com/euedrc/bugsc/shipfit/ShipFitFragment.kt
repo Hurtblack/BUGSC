@@ -16,12 +16,17 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
+import com.euedrc.bugsc.data.OnlineShipDetail
 import com.euedrc.bugsc.databinding.FragmentShipFitBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 class ShipFitFragment : Fragment() {
     companion object {
@@ -33,6 +38,7 @@ class ShipFitFragment : Fragment() {
     private var ships: List<ShipCard> = emptyList()
     private var currentShip: ShipCard? = null
     private var shipDisplayMap: Map<String, ShipCard> = emptyMap()
+    private var remoteSearchToken = 0L
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -48,11 +54,13 @@ class ShipFitFragment : Fragment() {
         loadData()
         binding.btnLoadout.setOnClickListener {
             val ship = currentShip ?: return@setOnClickListener
+            track("open_loadout")
             val bundle = Bundle().apply { putString("shipId", ship.id) }
             findNavController().navigate(R.id.action_ShipFitFragment_to_ShipLoadoutFragment, bundle)
         }
         binding.btnOfficialUrl.setOnClickListener {
             val url = currentShip?.officialUrl ?: return@setOnClickListener
+            track("open_official_url")
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }
     }
@@ -91,15 +99,75 @@ class ShipFitFragment : Fragment() {
         if (selected.isBlank()) return
         val ship = shipDisplayMap[selected] ?: ShipSearchResolver.resolve(selected, ships)
         if (ship == null) {
-            if (showMissingToast) toast("未找到对应船只：$selected")
+            searchOnlineShip(selected, showMissingToast)
             return
         }
+        track("select_ship")
         currentShip = ship
         binding.etShipId.setText(ShipSearchResolver.displayLabel(ship), false)
         binding.etShipId.dismissDropDown()
         renderShipCard(ship)
         binding.btnLoadout.visibility = View.VISIBLE
         binding.btnOfficialUrl.visibility = if (ship.officialUrl != null) View.VISIBLE else View.GONE
+    }
+
+    /** 本地资产没有命中时，按用户当前输入查询 SCAPI；不会预取或批量同步。 */
+    private fun searchOnlineShip(input: String, showMissingToast: Boolean) {
+        val token = ++remoteSearchToken
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val hit = AppServices.shipOnline.searchShips(input, 5).firstOrNull()
+                        ?: return@runCatching null
+                    AppServices.shipOnline.getShipDetail(hit.id)
+                }.getOrNull()
+            }
+            if (token != remoteSearchToken || !isAdded) return@launch
+            if (result == null) {
+                if (showMissingToast) toast("未找到对应船只：$input")
+                return@launch
+            }
+            track("select_online_ship")
+            binding.etShipId.setText(result.nameCn ?: result.nameEn ?: result.id, false)
+            binding.etShipId.dismissDropDown()
+            renderOnlineShip(result)
+            binding.btnLoadout.visibility = View.GONE
+            binding.btnOfficialUrl.visibility = View.GONE
+        }
+    }
+
+    private fun renderOnlineShip(detail: OnlineShipDetail) {
+        val root = runCatching { JSONObject(detail.rawJson) }.getOrNull()
+        if (root == null) {
+            binding.tvShipCard.text = "线上详情格式异常：${detail.id}"
+            return
+        }
+        val name = detail.nameCn ?: detail.nameEn ?: detail.title
+        val dimensions = root.optJSONObject("dimensions")?.let { dimensions ->
+            listOf("length", "beam", "height").mapNotNull { key ->
+                dimensions.opt(key)?.takeUnless { it == JSONObject.NULL }?.let { "$key=$it" }
+            }.joinToString(" / ").takeIf { it.isNotBlank() }
+        }
+        val hardpoints = root.optJSONObject("hardpoints")
+        val hardpointGroups = hardpoints?.keys()?.asSequence()?.mapNotNull { key ->
+            val count = hardpoints.optJSONObject(key)?.optJSONArray("items")?.length() ?: 0
+            if (count > 0) "$key=$count" else null
+        }?.toList().orEmpty()
+        binding.tvShipCard.text = buildString {
+            append("【线上资料】\n")
+            append("舰船：$name")
+            detail.nameEn?.takeIf { it != name }?.let { append(" / $it") }
+            append("\nID：${detail.id}\n")
+            root.optString("manufacturer_cn").takeIf { it.isNotBlank() }?.let { append("制造商：$it\n") }
+            root.optString("role").takeIf { it.isNotBlank() }?.let { append("定位：$it\n") }
+            root.opt("cargo")?.takeUnless { it == JSONObject.NULL }?.let { append("货舱：$it\n") }
+            dimensions?.let { append("尺寸：$it\n") }
+            if (hardpointGroups.isNotEmpty()) append("挂点：${hardpointGroups.joinToString("；")}\n")
+            append("\n数据来自 SCAPI 线上详情，可在 AI 中继续查询挂点和组件。")
+        }.trimEnd()
+        binding.ivShip.visibility = View.GONE
+        binding.ivShip.setImageDrawable(null)
+        binding.ivShip.tag = null
     }
 
     private fun renderShipCard(ship: ShipCard) {
@@ -112,6 +180,7 @@ class ShipFitFragment : Fragment() {
             ship.size?.let { append("尺寸：$it\n") }
             ship.crew?.let { append("乘员：$it\n") }
             ship.cargo?.let { append("货舱：$it\n") }
+            ship.salePriceCents?.let { append("售卖价：${formatUsdPrice(it)}\n") }
             append("\n【组件信息】\n")
             append("电源：${typeLabel(typeCounts, sizeSummary, "power_plant")}  冷却：${typeLabel(typeCounts, sizeSummary, "cooler")}  护盾：${typeLabel(typeCounts, sizeSummary, "shield_generator")}\n")
             append("量子：${typeLabel(typeCounts, sizeSummary, "quantum_drive")}  雷达：${typeLabel(typeCounts, sizeSummary, "radar")}\n")
@@ -124,6 +193,13 @@ class ShipFitFragment : Fragment() {
         binding.ivShip.setImageDrawable(null)
         binding.ivShip.tag = null
         loadShipImage(ship.imageUrl, ship.backupImageUrl)
+    }
+
+    private fun formatUsdPrice(cents: Int): String {
+        val dollars = cents / 100
+        val remainder = cents % 100
+        val base = "$" + String.format(Locale.US, "%,d", dollars)
+        return if (remainder == 0) base else "$base.${remainder.toString().padStart(2, '0')}"
     }
 
     private fun loadShipImage(url: String?, backupUrl: String?) {
@@ -217,6 +293,10 @@ class ShipFitFragment : Fragment() {
 
     private fun toast(msg: String) {
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("ship_fit", feature)
     }
 
     override fun onDestroyView() {

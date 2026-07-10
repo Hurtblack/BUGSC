@@ -79,4 +79,86 @@ class AgentHistoryStoreTest {
 
         assertEquals((1..12).map { it.toString() }.sorted(), store.load().map { it.id }.sorted())
     }
+
+    @Test
+    fun archiveCurrentConversationStoresTitleMessagesAndToolSummary() {
+        val store = AgentHistoryStore(FakeKv(), maxArchivedSessions = 5, maxArchivedMessages = 10)
+        store.save(
+            listOf(
+                AgentMessage("u1", AgentMessageRole.USER, "科粒晶现在多少钱", 1L, AgentMessageStatus.SENT),
+                AgentMessage("a1", AgentMessageRole.ASSISTANT, "1200 aUEC", 2L, AgentMessageStatus.SENT, "search_market page=1"),
+            ),
+        )
+
+        val archived = store.archiveCurrentConversation(now = 3L)
+
+        assertEquals(true, archived)
+        val sessions = store.loadArchivedSessions()
+        assertEquals(1, sessions.size)
+        assertEquals("科粒晶现在多少钱", sessions.single().title)
+        assertEquals("search_market page=1", sessions.single().messages.last().toolSummary)
+    }
+
+    @Test
+    fun archiveCurrentConversationSkipsEmptyOrAssistantOnlyGreeting() {
+        val store = AgentHistoryStore(FakeKv())
+        store.save(listOf(AgentMessage("a1", AgentMessageRole.ASSISTANT, "你好", 1L, AgentMessageStatus.SENT)))
+
+        val archived = store.archiveCurrentConversation(now = 2L)
+
+        assertEquals(false, archived)
+        assertTrue(store.loadArchivedSessions().isEmpty())
+    }
+
+    @Test
+    fun archiveCurrentConversationKeepsMostRecentSessionsAndMessages() {
+        val store = AgentHistoryStore(FakeKv(), maxArchivedSessions = 2, maxArchivedMessages = 2)
+        repeat(3) { index ->
+            store.save(
+                listOf(
+                    AgentMessage("u$index-1", AgentMessageRole.USER, "会话 $index 第一条", index * 10L + 1, AgentMessageStatus.SENT),
+                    AgentMessage("a$index", AgentMessageRole.ASSISTANT, "回答 $index", index * 10L + 2, AgentMessageStatus.SENT),
+                    AgentMessage("u$index-2", AgentMessageRole.USER, "会话 $index 第二条", index * 10L + 3, AgentMessageStatus.SENT),
+                ),
+            )
+            store.archiveCurrentConversation(now = index.toLong())
+        }
+
+        val sessions = store.loadArchivedSessions()
+        assertEquals(listOf("会话 2 第一条", "会话 1 第一条"), sessions.map { it.title })
+        assertEquals(listOf("a2", "u2-2"), sessions.first().messages.map { it.id })
+    }
+
+    @Test
+    fun restoreArchivedSessionReplacesCurrentConversation() {
+        val store = AgentHistoryStore(FakeKv())
+        store.save(listOf(AgentMessage("u1", AgentMessageRole.USER, "查市场", 1L, AgentMessageStatus.SENT)))
+        store.archiveCurrentConversation(now = 2L)
+        val sessionId = store.loadArchivedSessions().single().id
+        store.save(listOf(AgentMessage("u2", AgentMessageRole.USER, "新的", 3L, AgentMessageStatus.SENT)))
+
+        val restored = store.restoreArchivedSession(sessionId)
+
+        assertEquals(true, restored)
+        assertEquals(listOf("u1"), store.load().map { it.id })
+    }
+
+    @Test
+    fun archiveRestoredSessionUpdatesExistingArchiveInsteadOfDuplicatingIt() {
+        val store = AgentHistoryStore(FakeKv())
+        store.save(listOf(AgentMessage("u1", AgentMessageRole.USER, "查市场", 1L, AgentMessageStatus.SENT)))
+        store.archiveCurrentConversation(now = 2L)
+        val sessionId = store.loadArchivedSessions().single().id
+
+        store.restoreArchivedSession(sessionId)
+        store.append(AgentMessage("a1", AgentMessageRole.ASSISTANT, "市场结果", 3L, AgentMessageStatus.SENT))
+        val archived = store.archiveCurrentConversation(now = 4L)
+
+        val sessions = store.loadArchivedSessions()
+        assertEquals(true, archived)
+        assertEquals(1, sessions.size)
+        assertEquals(sessionId, sessions.single().id)
+        assertEquals(listOf("u1", "a1"), sessions.single().messages.map { it.id })
+        assertEquals(4L, sessions.single().updatedAt)
+    }
 }

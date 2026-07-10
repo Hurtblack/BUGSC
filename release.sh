@@ -25,6 +25,8 @@ fi
 TAG="v${VERSION_NAME}"
 GRADLE_FILE="app/build.gradle.kts"
 GITEE_REPO="hurtblack/BUGSC"
+APP_PAGE_WEBHOOK_URL="${BUGSC_APP_PAGE_WEBHOOK_URL:-}"
+DEFAULT_ANALYTICS_URL="https://scmobiglas-analytics.a1447270904.workers.dev/collect"
 
 # ---- 前置校验 ----
 if [ -n "$(git status --porcelain)" ]; then
@@ -54,7 +56,11 @@ rm -f "${GRADLE_FILE}.bak"
 
 # ---- 打包 ----
 echo "▶ 打 release 包..."
-./gradlew :app:assembleRelease -x lintVitalRelease --console=plain
+GRADLE_ARGS=(":app:assembleRelease" "-x" "lintVitalRelease" "--console=plain")
+ANALYTICS_URL="${BUGSC_ANALYTICS_URL:-$DEFAULT_ANALYTICS_URL}"
+GRADLE_ARGS+=("-PBUGSC_ANALYTICS_URL=${ANALYTICS_URL}")
+echo "   已注入匿名统计地址: ${ANALYTICS_URL}"
+./gradlew "${GRADLE_ARGS[@]}"
 
 APK_SRC="app/build/outputs/apk/release/SCMobiGlas-release-v${VERSION_NAME}.apk"
 if [ ! -f "$APK_SRC" ]; then
@@ -109,7 +115,7 @@ publish_github() {
 
 publish_gitee() {
   echo "▶ 推送 Gitee 并创建 Release..."
-  local TOKEN NOTE_JSON NOTE_ESC RESP RELEASE_ID ASSET UP
+  local TOKEN NOTE_JSON NOTE_ESC RESP RELEASE_ID ASSET UP APK_URL
   if ! git remote get-url gitee >/dev/null 2>&1; then
     git remote add gitee "https://gitee.com/${GITEE_REPO}.git"
   fi
@@ -146,13 +152,63 @@ except Exception:
     -F "file=@${ASSET}" \
     "https://gitee.com/api/v5/repos/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files")
   rm -f "$ASSET"
-  if echo "$UP" | grep -q '"browser_download_url"'; then
+  APK_URL=$(printf '%s' "$UP" | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("browser_download_url", ""))
+except Exception:
+    pass')
+  if [ -n "$APK_URL" ]; then
     echo "   Gitee 资产: SCMobiGlas-release-${TAG}.apk 上传成功"
+    notify_app_page "$TAG" "$VERSION_NAME" "$APK_URL" "https://gitee.com/${GITEE_REPO}/releases/tag/${TAG}" "$NOTE_JSON" || true
   else
     echo "⚠ Gitee APK 上传可能失败，响应片段："
     echo "$UP" | head -10
   fi
   echo "   Gitee 页面: https://gitee.com/${GITEE_REPO}/releases/tag/${TAG}"
+}
+
+notify_app_page() {
+  local TAG_NAME VERSION_NAME APK_URL PAGE_URL NOTE_JSON TOKEN BODY RESP
+  TAG_NAME="$1"
+  VERSION_NAME="$2"
+  APK_URL="$3"
+  PAGE_URL="$4"
+  NOTE_JSON="$5"
+  TOKEN="${BUGSC_APP_PAGE_WEBHOOK_TOKEN:-}"
+
+  if [ -z "$APP_PAGE_WEBHOOK_URL" ]; then
+    echo "⚠ 未设置 BUGSC_APP_PAGE_WEBHOOK_URL，跳过后端下载页更新。"
+    return 0
+  fi
+  if [ -z "$TOKEN" ]; then
+    echo "⚠ 未设置 BUGSC_APP_PAGE_WEBHOOK_TOKEN，跳过后端下载页更新。"
+    return 0
+  fi
+
+  BODY=$(TAG_NAME="$TAG_NAME" VERSION_NAME="$VERSION_NAME" APK_URL="$APK_URL" PAGE_URL="$PAGE_URL" NOTE_JSON="$NOTE_JSON" python3 -c 'import json,os
+print(json.dumps({
+    "hook_name": "tag_push_hooks",
+    "event_name": "tag_push",
+    "ref": "refs/tags/" + os.environ["TAG_NAME"],
+    "tag_name": os.environ["TAG_NAME"],
+    "version_name": os.environ["VERSION_NAME"],
+    "apk_url": os.environ["APK_URL"],
+    "page_url": os.environ["PAGE_URL"],
+    "body": os.environ["NOTE_JSON"],
+    "repository": {
+        "full_name": "hurtblack/BUGSC",
+        "html_url": "https://gitee.com/hurtblack/BUGSC"
+    }
+}, ensure_ascii=False))')
+
+  RESP=$(curl -s -X POST \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: git-oschina-hook" \
+    -H "X-Gitee-Event: Tag Push Hook" \
+    -H "X-Gitee-Token: ${TOKEN}" \
+    -d "$BODY" \
+    "$APP_PAGE_WEBHOOK_URL")
+  echo "   后端下载页通知: ${RESP:-ok}"
 }
 
 # 任一平台失败不阻断另一平台（set -e 环境下用 || true 兜底）

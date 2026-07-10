@@ -12,6 +12,8 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.requireScmLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,7 +34,7 @@ class ChatConversationListFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        if (::container.isInitialized && com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) {
+        if (::container.isInitialized && AppServices.auth.isLoggedIn()) {
             load()
         }
     }
@@ -90,6 +92,7 @@ class ChatConversationListFragment : Fragment() {
     }
 
     private fun openConversation(conversation: ChatConversation) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("chat_conversations", "open_conversation")
         viewLifecycleOwner.lifecycleScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { ChatClient.markRead(conversation.id) }

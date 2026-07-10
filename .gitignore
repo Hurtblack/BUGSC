@@ -27,6 +27,8 @@ keystore.properties
 docs/superpowers/plans/
 .superpowers/
 .worktrees/
+private-full-source/
+.private/
 
 # Cloudflare 部署相关一律不入库（wrangler 凭据/日志含 OAuth token）
 cloudflare/

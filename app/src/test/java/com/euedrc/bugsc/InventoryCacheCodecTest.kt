@@ -21,7 +21,17 @@ class InventoryCacheCodecTest {
                 page = 2,
                 canGift = true,
                 canReclaim = false,
-                canUpgrade = true
+                canUpgrade = true,
+                subItems = listOf(
+                    InventorySubItem(
+                        title = "Test Ship",
+                        kind = "Ship",
+                        subtitle = "Flight ready",
+                        imageUrl = "https://example.com/sub.jpg"
+                    )
+                ),
+                upgradeData = """{"fromShip":{"name":"A"},"toShip":{"name":"B"}}""",
+                ccuInfo = InventoryCcuInfo(fromShipName = "A", toShipName = "B", fromShipId = 1, toShipId = 2)
             )
         )
 

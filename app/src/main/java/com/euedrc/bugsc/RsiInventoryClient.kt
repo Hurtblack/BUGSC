@@ -35,6 +35,35 @@ data class RsiUserProfile(
     val referralCode: String = ""
 )
 
+sealed class RsiAccountAction {
+    data class Reclaim(
+        val pledgeId: String,
+        val currentPassword: String
+    ) : RsiAccountAction()
+
+    data class Gift(
+        val pledgeId: String,
+        val currentPassword: String,
+        val email: String,
+        val name: String
+    ) : RsiAccountAction()
+
+    data class CancelGift(
+        val pledgeId: String
+    ) : RsiAccountAction()
+}
+
+data class RsiAccountActionRequest(
+    val endpoint: String,
+    val body: JSONObject
+)
+
+data class RsiAccountActionResult(
+    val success: Boolean,
+    val code: String,
+    val message: String
+)
+
 data class InventoryRequestState(
     val page: Int,
     val attempt: Int,
@@ -174,6 +203,38 @@ class RsiInventoryClient(
             handle = handle,
             avatarUrl = graphAvatar.ifBlank { citizenAvatar },
             referralCode = account.optString("referral_code")
+        )
+    }
+
+    fun reclaimPledge(pledgeId: String, currentPassword: String): RsiAccountActionResult {
+        return performAccountAction(RsiAccountAction.Reclaim(pledgeId, currentPassword))
+    }
+
+    fun giftPledge(
+        pledgeId: String,
+        currentPassword: String,
+        email: String,
+        name: String
+    ): RsiAccountActionResult {
+        return performAccountAction(RsiAccountAction.Gift(pledgeId, currentPassword, email, name))
+    }
+
+    fun cancelGift(pledgeId: String): RsiAccountActionResult {
+        return performAccountAction(RsiAccountAction.CancelGift(pledgeId))
+    }
+
+    private fun performAccountAction(action: RsiAccountAction): RsiAccountActionResult {
+        if (!session.isLoggedIn) throw IllegalStateException("请先登录")
+        refreshCsrfToken()
+        val request = accountActionRequest(action)
+        val response = postJson(request.endpoint, request.body)
+        return RsiAccountActionResult(
+            success = response.optInt("success") == 1,
+            code = response.optString("code"),
+            message = response.optString("msg")
+                .ifEmpty { response.optString("message") }
+                .ifEmpty { response.optString("error") }
+                .ifEmpty { if (response.optInt("success") == 1) "操作成功" else "操作失败" }
         )
     }
 
@@ -508,5 +569,32 @@ class RsiInventoryClient(
     __typename
   }
 }"""
+
+        internal fun accountActionRequest(action: RsiAccountAction): RsiAccountActionRequest {
+            return when (action) {
+                is RsiAccountAction.Reclaim -> RsiAccountActionRequest(
+                    endpoint = "api/account/reclaimPledge",
+                    body = JSONObject().apply {
+                        put("pledge_id", action.pledgeId)
+                        put("current_password", action.currentPassword)
+                    }
+                )
+                is RsiAccountAction.Gift -> RsiAccountActionRequest(
+                    endpoint = "api/account/giftPledge",
+                    body = JSONObject().apply {
+                        put("pledge_id", action.pledgeId)
+                        put("current_password", action.currentPassword)
+                        put("email", action.email)
+                        put("name", action.name)
+                    }
+                )
+                is RsiAccountAction.CancelGift -> RsiAccountActionRequest(
+                    endpoint = "api/account/cancelGift",
+                    body = JSONObject().apply {
+                        put("pledge_id", action.pledgeId)
+                    }
+                )
+            }
+        }
     }
 }

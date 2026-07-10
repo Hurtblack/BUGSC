@@ -26,6 +26,11 @@
     <string name="agent_input_config_hint">请先设置模型 API Key</string>
     <string name="agent_send">发送</string>
     <string name="agent_stop">停止</string>
+    <string name="agent_history">历史</string>
+    <string name="agent_history_recent_sessions">最近 %1$d 个会话</string>
+    <string name="agent_history_empty">暂无历史对话</string>
+    <string name="agent_history_restored">已恢复历史对话</string>
+    <string name="agent_cancel">取消</string>
     <string name="agent_new_chat">新对话</string>
     <string name="agent_new_chat_started">已开启新对话</string>
     <string name="agent_status_deepseek">MobiGuide · AI</string>

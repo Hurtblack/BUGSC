@@ -11,6 +11,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
+import com.euedrc.bugsc.data.AuthDataSource
 import com.euedrc.bugsc.finishLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -19,6 +22,7 @@ import kotlinx.coroutines.withContext
 
 /** SCM 邮箱验证码注册：取图→点选→发码（60s 倒计时）→校验注册（成功带 token 自动登录）。 */
 class ScmRegisterFragment : Fragment() {
+    private val auth get() = AppServices.auth
 
     private lateinit var etEmail: EditText
     private lateinit var etEmailCode: EditText
@@ -45,22 +49,31 @@ class ScmRegisterFragment : Fragment() {
         tvStatus = view.findViewById(R.id.tv_status)
         tvError = view.findViewById(R.id.tv_error)
 
-        captchaView.onRequestRefresh = { loadCaptcha() }
+        captchaView.onRequestRefresh = {
+            track("refresh_captcha")
+            loadCaptcha()
+        }
         captchaView.onVerified = {
             pendingVerification = it
             tvStatus.text = "验证码已采集，可发送邮箱验证码"
         }
         loadCaptcha()
 
-        btnSendCode.setOnClickListener { sendCode() }
-        btnRegister.setOnClickListener { register() }
+        btnSendCode.setOnClickListener {
+            track("send_email_code")
+            sendCode()
+        }
+        btnRegister.setOnClickListener {
+            track("register")
+            register()
+        }
     }
 
     private fun loadCaptcha() {
         pendingVerification = null
         captchaView.showLoading()
         viewLifecycleOwner.lifecycleScope.launch {
-            val challenge = withContext(Dispatchers.IO) { runCatching { ScmClient.getCaptcha() }.getOrNull() }
+            val challenge = withContext(Dispatchers.IO) { runCatching { auth.getCaptcha() }.getOrNull() }
             if (challenge != null) captchaView.setChallenge(challenge)
             else captchaView.showError("验证码加载失败，点击换一张重试")
         }
@@ -77,8 +90,11 @@ class ScmRegisterFragment : Fragment() {
         tvStatus.text = "正在发送验证码…"
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { ScmClient.sendEmailCode(email, ScmClient.MAIL_TYPE_REGISTER, verification) }
-                    .getOrElse { ScmResult(false, it.message ?: "网络错误", -1) }
+                runCatching {
+                    auth.sendEmailCode(email, AuthDataSource.MAIL_TYPE_REGISTER, verification)
+                }.getOrElse {
+                    ScmResult(false, it.message ?: "网络错误", -1)
+                }
             }
             if (result.success) {
                 tvStatus.text = "验证码已发送，请查收邮箱"
@@ -114,8 +130,11 @@ class ScmRegisterFragment : Fragment() {
         btnRegister.isEnabled = false
         viewLifecycleOwner.lifecycleScope.launch {
             val outcome = withContext(Dispatchers.IO) {
-                runCatching { ScmClient.verifyAndRegister(email, password, code, pendingVerification) }
-                    .getOrElse { ScmRegisterOutcome.Failure(-1, it.message ?: "网络错误") }
+                runCatching {
+                    auth.register(email, password, code, pendingVerification)
+                }.getOrElse {
+                    ScmRegisterOutcome.Failure(-1, it.message ?: "网络错误")
+                }
             }
             btnRegister.isEnabled = true
             when (outcome) {
@@ -130,5 +149,9 @@ class ScmRegisterFragment : Fragment() {
     private fun showError(message: String) {
         tvError.text = message
         tvError.visibility = View.VISIBLE
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("scm_register", feature)
     }
 }

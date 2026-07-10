@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/hud_screen_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card_bg_blue"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:letterSpacing="0.15"
+                android:text="WBCCU // CHAIN"
+                android:textColor="@color/sc_accent"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:letterSpacing="0.08"
+                android:text="WBCCU 链路"
+                android:textColor="@color/sc_text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_wbccu_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="正在加载链路"
+                android:textColor="@color/sc_text_mid"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:id="@+id/tv_wbccu_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/sc_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_wbccu_validation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/sc_warn"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_wbccu_add_base"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_inventory_secondary"
+                    android:text="规划路线"
+                    android:textColor="@color/sc_text"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_wbccu_add_inventory"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_inventory_success"
+                    android:text="库存CCU"
+                    android:textColor="@color/sc_ink"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_wbccu_add_manual"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/button_inventory_primary"
+                    android:text="添加CCU"
+                    android:textColor="@color/sc_ink"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_wbccu_import"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/sc_panel2"
+                    android:text="导入"
+                    android:textColor="@color/sc_text"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_wbccu_copy"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/sc_panel2"
+                    android:text="复制码"
+                    android:textColor="@color/sc_text"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_wbccu_copy_inventory"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="2"
+                    android:backgroundTint="@color/sc_panel2"
+                    android:text="复制库存清单"
+                    android:textColor="@color/sc_text"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_wbccu_clear"
+                    style="?android:attr/buttonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/sc_panel2"
+                    android:text="清空"
+                    android:textColor="@color/sc_warn"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/container_wbccu_steps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical" />
+    </LinearLayout>
+</ScrollView>

@@ -22,6 +22,7 @@ import android.widget.Toast
 import androidx.cardview.widget.CardView
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.data.Bug
 import com.euedrc.bugsc.data.BugRepository
 import com.google.android.material.card.MaterialCardView
@@ -144,12 +145,22 @@ class BugListFragment : Fragment() {
     }
 
     private fun setupListeners() {
-        btnSearch.setOnClickListener { refreshList() }
-        btnClear.setOnClickListener { clearFilters() }
+        btnSearch.setOnClickListener {
+            track("search")
+            refreshList()
+        }
+        btnClear.setOnClickListener {
+            track("clear_filters")
+            clearFilters()
+        }
         btnSubmit.setOnClickListener {
+            track("open_submit")
             findNavController().navigate(R.id.action_BugListFragment_to_BugSubmitFragment)
         }
-        btnImport.setOnClickListener { importShareCode() }
+        btnImport.setOnClickListener {
+            track("import_share_code")
+            importShareCode()
+        }
 
         spinnerGpu.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) = refreshList()
@@ -250,6 +261,7 @@ class BugListFragment : Fragment() {
             isClickable = true
             isFocusable = true
             setOnClickListener {
+                track("open_detail")
                 findNavController().navigate(R.id.action_BugListFragment_to_BugDetailFragment, Bundle().apply {
                     putString("bugId", bug.id)
                 })
@@ -393,6 +405,10 @@ class BugListFragment : Fragment() {
     }
 
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("bug_list", feature)
+    }
 
     companion object {
         val GPU_OPTIONS = arrayOf("不限", "NVIDIA", "AMD", "Intel")

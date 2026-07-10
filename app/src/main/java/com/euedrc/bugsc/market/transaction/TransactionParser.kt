@@ -1,12 +1,9 @@
 package com.euedrc.bugsc.market.transaction
 
-import com.euedrc.bugsc.scm.ScmAuthStore
 import org.json.JSONObject
 import java.math.BigDecimal
-import java.net.URLEncoder
 
 object TransactionParser {
-    // 创建接口必须返回可用于详情查询的 transactionNumber；数据库 id 不能当作交易编号展示。
     fun parseCreate(json: JSONObject): TransactionCreateResult {
         requireSuccess(json)
         val transactionNumber = when (val data = json.opt("data")) {
@@ -98,73 +95,4 @@ object TransactionParser {
 
     private fun JSONObject.decimal(key: String): BigDecimal =
         opt(key)?.toString()?.toBigDecimalOrNull() ?: BigDecimal.ZERO
-}
-
-class TransactionClient {
-    private fun api() = ScmAuthStore.api()
-
-    fun create(draft: TransactionDraft): TransactionCreateResult {
-        val body = JSONObject()
-            .put("orderNumber", draft.orderNumber)
-            .put("number", draft.number)
-            .put("locationId", draft.locationId)
-            .put("deliveryMethod", draft.deliveryMethod)
-            .put("shippingFee", draft.shippingFee)
-            .toString()
-        return TransactionParser.parseCreate(request("POST", "/sc/order-transactions/create", body))
-    }
-
-    fun checkOngoing(orderNumber: String): Boolean {
-        val encoded = URLEncoder.encode(orderNumber, "UTF-8")
-        return TransactionParser.parseBoolean(
-            request("GET", "/sc/order-transactions/check-ongoing?orderNumber=$encoded")
-        )
-    }
-
-    fun page(
-        pageNo: Int,
-        pageSize: Int = 20,
-        transactionStatus: Int? = null,
-        orderNumber: String? = null,
-    ): TransactionPage {
-        val path = buildString {
-            append("/sc/order-transactions/page?pageNo=$pageNo&pageSize=$pageSize&language=CN")
-            transactionStatus?.let { append("&transactionStatus=$it") }
-            orderNumber?.takeIf(String::isNotBlank)?.let {
-                append("&orderNumber=").append(URLEncoder.encode(it, "UTF-8"))
-            }
-        }
-        return TransactionParser.parsePage(request("GET", path))
-    }
-
-    fun get(transactionNumber: String): TransactionRecord {
-        val encoded = URLEncoder.encode(transactionNumber, "UTF-8")
-        return TransactionParser.parseDetail(
-            request("GET", "/sc/order-transactions/get?transactionNumber=$encoded&language=CN")
-        )
-    }
-
-    fun updateStatus(transactionNumber: String, deliveryStatus: Int) {
-        val body = JSONObject()
-            .put("transactionNumber", transactionNumber)
-            .put("deliveryStatus", deliveryStatus)
-            .toString()
-        TransactionParser.parseVoid(request("PUT", "/sc/order-transactions/update-status", body))
-    }
-
-    fun approve(transactionNumber: String) {
-        val encoded = URLEncoder.encode(transactionNumber, "UTF-8")
-        TransactionParser.parseVoid(request("PUT", "/sc/order-transactions/approve?transactionNumber=$encoded"))
-    }
-
-    fun addressList(): List<AddressNode> =
-        TransactionParser.parseAddresses(request("GET", "/sc/address/simple-list?language=CN"))
-
-    private fun request(method: String, path: String, body: String? = null): JSONObject {
-        val response = api().request(method, path, body)
-        if (response.code !in 200..299) {
-            throw IllegalStateException("SCM API 返回 ${response.code}")
-        }
-        return JSONObject(response.body)
-    }
 }

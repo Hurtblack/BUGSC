@@ -39,7 +39,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -47,6 +48,18 @@ android {
             )
         }
     }
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("oss") {
+            dimension = "distribution"
+            applicationIdSuffix = ".oss"
+            versionNameSuffix = "-oss"
+        }
+        create("full") {
+            dimension = "distribution"
+        }
+    }
+    sourceSets.getByName("full").java.srcDir(rootProject.file(".private/full/java"))
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

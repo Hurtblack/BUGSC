@@ -18,6 +18,8 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.requireScmLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -27,7 +29,7 @@ import java.text.NumberFormat
 import java.util.Locale
 
 class MyMarketOrdersFragment : Fragment() {
-    private val client = MarketPublishClient()
+    private val marketPublish get() = AppServices.marketPublish
     private lateinit var status: TextView
     private lateinit var list: LinearLayout
     private lateinit var loadMore: Button
@@ -55,10 +57,22 @@ class MyMarketOrdersFragment : Fragment() {
             paintFilters(all, sell, buy)
             loadFirst()
         }
-        all.setOnClickListener { switch(null) }
-        sell.setOnClickListener { switch(PublishCreatorType.SELL) }
-        buy.setOnClickListener { switch(PublishCreatorType.BUY) }
-        loadMore.setOnClickListener { loadNext() }
+        all.setOnClickListener {
+            track("filter_all")
+            switch(null)
+        }
+        sell.setOnClickListener {
+            track("filter_sell")
+            switch(PublishCreatorType.SELL)
+        }
+        buy.setOnClickListener {
+            track("filter_buy")
+            switch(PublishCreatorType.BUY)
+        }
+        loadMore.setOnClickListener {
+            track("load_more")
+            loadNext()
+        }
         paintFilters(all, sell, buy)
         loadFirst()
     }
@@ -91,7 +105,9 @@ class MyMarketOrdersFragment : Fragment() {
         if (loading) return
         loading = true
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { client.ownOrders(pageNo, creatorType = filter) } }
+            val result = withContext(Dispatchers.IO) {
+                runCatching { marketPublish.ownOrders(pageNo, creatorType = filter) }
+            }
             loading = false
             loadMore.isEnabled = true
             loadMore.text = "加载更多"
@@ -117,6 +133,7 @@ class MyMarketOrdersFragment : Fragment() {
                 .apply { topMargin = 10.dp }
             isClickable = true
             setOnClickListener {
+                track("open_order_detail")
                 findNavController().navigate(R.id.MarketDetailFragment, bundleOf("orderNumber" to order.orderNumber))
             }
             addView(TextView(requireContext()).apply {
@@ -141,17 +158,27 @@ class MyMarketOrdersFragment : Fragment() {
     private fun actionRow(order: OwnMarketOrder): View =
         LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
-            addAction(this, "编辑") { showEditDialog(order) }
+            addAction(this, "编辑") {
+                track("edit_order")
+                showEditDialog(order)
+            }
             addAction(this, if (order.status == PublishOrderStatus.VISIBLE) "下架" else "上架") {
+                track(if (order.status == PublishOrderStatus.VISIBLE) "hide_order" else "show_order")
                 mutate("状态已更新") {
-                    client.setOrderStatus(
+                    marketPublish.setOrderStatus(
                         order.orderNumber,
                         if (order.status == PublishOrderStatus.VISIBLE) PublishOrderStatus.HIDDEN else PublishOrderStatus.VISIBLE,
                     )
                 }
             }
-            addAction(this, "补数量") { mutate("已补数量") { client.quantityAdd(order.orderNumber) } }
-            addAction(this, "删除", danger = true) { confirmDelete(order) }
+            addAction(this, "补数量") {
+                track("add_quantity")
+                mutate("已补数量") { marketPublish.quantityAdd(order.orderNumber) }
+            }
+            addAction(this, "删除", danger = true) {
+                track("delete_order")
+                confirmDelete(order)
+            }
         }
 
     private fun addAction(parent: LinearLayout, label: String, danger: Boolean = false, action: () -> Unit) {
@@ -212,7 +239,7 @@ class MyMarketOrdersFragment : Fragment() {
                     return@setPositiveButton
                 }
                 mutate("挂单已更新") {
-                    client.updateOrder(
+                    marketPublish.updateOrder(
                         orderNumber = order.orderNumber,
                         unitPrice = nextPrice,
                         remainingQuantity = nextQty,
@@ -230,11 +257,11 @@ class MyMarketOrdersFragment : Fragment() {
             .setTitle("删除挂单")
             .setMessage("确定删除 ${order.itemName.ifBlank { order.orderNumber }}？")
             .setNegativeButton("取消", null)
-            .setPositiveButton("删除") { _, _ -> mutate("挂单已删除") { client.deleteOrder(order.orderNumber) } }
+            .setPositiveButton("删除") { _, _ -> mutate("挂单已删除") { marketPublish.deleteOrder(order.orderNumber) } }
             .show()
     }
 
-    private fun mutate(success: String, block: () -> Unit) {
+    private fun mutate(success: String, block: suspend () -> Unit) {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { block() } }
             result.onFailure { Toast.makeText(requireContext(), it.message ?: "操作失败", Toast.LENGTH_LONG).show() }
@@ -252,4 +279,8 @@ class MyMarketOrdersFragment : Fragment() {
         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("my_market_orders", feature)
+    }
 }

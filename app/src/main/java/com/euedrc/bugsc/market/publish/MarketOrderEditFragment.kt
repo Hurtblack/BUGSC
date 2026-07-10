@@ -24,10 +24,11 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.market.transaction.AddressBranch
 import com.euedrc.bugsc.market.transaction.AddressChoice
 import com.euedrc.bugsc.market.transaction.AddressTree
-import com.euedrc.bugsc.market.transaction.TransactionClient
 import com.euedrc.bugsc.requireScmLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,8 +37,8 @@ import java.io.File
 import java.math.BigDecimal
 
 class MarketOrderEditFragment : Fragment() {
-    private val client = MarketPublishClient()
-    private val addressClient = TransactionClient()
+    private val marketPublish get() = AppServices.marketPublish
+    private val transactions get() = AppServices.transactions
     private val itemRows = mutableListOf<ItemRow>()
     private var creatorType = PublishCreatorType.SELL
     private var selectedLocationId: Long? = null
@@ -73,8 +74,14 @@ class MarketOrderEditFragment : Fragment() {
 
         val sell = view.findViewById<Button>(R.id.btn_publish_sell)
         val buy = view.findViewById<Button>(R.id.btn_publish_buy)
-        sell.setOnClickListener { setCreatorType(PublishCreatorType.SELL, sell, buy) }
-        buy.setOnClickListener { setCreatorType(PublishCreatorType.BUY, sell, buy) }
+        sell.setOnClickListener {
+            track("type_sell")
+            setCreatorType(PublishCreatorType.SELL, sell, buy)
+        }
+        buy.setOnClickListener {
+            track("type_buy")
+            setCreatorType(PublishCreatorType.BUY, sell, buy)
+        }
         setCreatorType(PublishCreatorType.SELL, sell, buy)
 
         val search = view.findViewById<EditText>(R.id.et_item_search)
@@ -111,6 +118,7 @@ class MarketOrderEditFragment : Fragment() {
     }
 
     private fun searchItems(raw: String) {
+        track("search_item")
         val keyword = raw.trim()
         if (keyword.isBlank()) {
             toast("请输入物品名称")
@@ -119,7 +127,7 @@ class MarketOrderEditFragment : Fragment() {
         results.removeAllViews()
         addSmallText(results, "搜索中…", R.color.sc_text_dim)
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { client.searchItems(keyword) } }
+            val result = withContext(Dispatchers.IO) { runCatching { marketPublish.searchItems(keyword) } }
             results.removeAllViews()
             result.onFailure { addSmallText(results, "搜索失败：${it.message ?: "网络错误"}", R.color.sc_danger) }
                 .onSuccess { list ->
@@ -142,6 +150,7 @@ class MarketOrderEditFragment : Fragment() {
         }
 
     private fun addItem(item: ItemSearchResult) {
+        track("add_item")
         if (itemRows.any { it.item.id == item.id }) {
             toast("已添加该物品")
             return
@@ -156,7 +165,9 @@ class MarketOrderEditFragment : Fragment() {
         row.imageStatus.text = "图片状态加载中…"
         row.upload.isEnabled = false
         viewLifecycleOwner.lifecycleScope.launch {
-            val status = withContext(Dispatchers.IO) { runCatching { client.imageStatus(row.item.id) }.getOrNull() }
+            val status = withContext(Dispatchers.IO) {
+                runCatching { marketPublish.imageStatus(row.item.id) }.getOrNull()
+            }
             row.imageStatus.text = when (status?.status) {
                 0 -> "图片审核中"
                 1 -> "已有审核通过图片，可继续提交更好的图片"
@@ -169,7 +180,7 @@ class MarketOrderEditFragment : Fragment() {
 
     private fun uploadImage(row: ItemRow, uri: Uri) {
         val mime = requireContext().contentResolver.getType(uri).orEmpty()
-        if (mime !in MarketPublishClient.ALLOWED_MIME_TYPES) {
+        if (mime !in marketPublish.allowedMimeTypes) {
             toast("只支持 JPG、PNG、WebP")
             return
         }
@@ -179,7 +190,7 @@ class MarketOrderEditFragment : Fragment() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val file = copyToCache(uri, mime)
-                    client.uploadImage(row.item.id, file, mime)
+                    marketPublish.uploadImage(row.item.id, file, mime)
                 }
             }
             result.onFailure {
@@ -213,6 +224,7 @@ class MarketOrderEditFragment : Fragment() {
         }
 
     private fun submitOrder() {
+        track("submit_order")
         val drafts = itemRows.map {
             PublishItemDraft(
                 item = it.item,
@@ -246,11 +258,11 @@ class MarketOrderEditFragment : Fragment() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val manifestId = if (validation.items.size > 1) {
-                        client.createItemList(listTitle(validation.items), validation.items)
+                        marketPublish.createItemList(listTitle(validation.items), validation.items)
                     } else {
                         null
                     }
-                    client.createOrder(
+                    marketPublish.createOrder(
                         creatorType = draft.creatorType,
                         locationId = selectedLocationId!!,
                         status = draft.status,
@@ -258,7 +270,7 @@ class MarketOrderEditFragment : Fragment() {
                         items = validation.items,
                         manifestId = manifestId,
                     )
-                    client.ownOrders(1, creatorType = draft.creatorType)
+                    marketPublish.ownOrders(1, creatorType = draft.creatorType)
                         .let { MarketPublishJson.findCreatedOrderNumber(it, draft.creatorType, validation.items.first().item.itemName) }
                 }
             }
@@ -280,13 +292,20 @@ class MarketOrderEditFragment : Fragment() {
         val builder = AlertDialog.Builder(requireContext())
             .setTitle("创建成功")
             .setMessage(if (orderNumber.isBlank()) "挂单已创建，可在“我的挂单”中查看。" else "订单编号：$orderNumber")
-            .setNegativeButton("我的挂单") { _, _ -> findNavController().navigate(R.id.MyMarketOrdersFragment) }
+            .setNegativeButton("我的挂单") { _, _ ->
+                track("open_my_orders")
+                findNavController().navigate(R.id.MyMarketOrdersFragment)
+            }
         if (orderNumber.isNotBlank()) {
             builder.setPositiveButton("查看详情") { _, _ ->
+                track("open_order_detail")
                 findNavController().navigate(R.id.MarketDetailFragment, bundleOf("orderNumber" to orderNumber))
             }
         } else {
-            builder.setPositiveButton("返回市场") { _, _ -> findNavController().popBackStack() }
+            builder.setPositiveButton("返回市场") { _, _ ->
+                track("back_to_market")
+                findNavController().popBackStack()
+            }
         }
         builder.show()
     }
@@ -300,7 +319,7 @@ class MarketOrderEditFragment : Fragment() {
         bindSpinner(station, "请先选择星体", emptyList()) {}
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { AddressTree.build(addressClient.addressList()) }
+                runCatching { AddressTree.build(transactions.addressList()) }
             }
             result.onFailure {
                 locationText.text = "地点加载失败，点击重试"
@@ -386,6 +405,7 @@ class MarketOrderEditFragment : Fragment() {
                 upload.text = "上传图片"
                 upload.isAllCaps = false
                 upload.setOnClickListener {
+                    track("pick_image")
                     pendingUploadRow = this@ItemRow
                     imagePicker.launch("image/*")
                 }
@@ -420,4 +440,8 @@ class MarketOrderEditFragment : Fragment() {
     }
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("market_order_edit", feature)
+    }
 }

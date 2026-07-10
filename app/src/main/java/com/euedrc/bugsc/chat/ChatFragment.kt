@@ -26,8 +26,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.navigateToLoginGated
-import com.euedrc.bugsc.scm.ScmAuthStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,7 +43,7 @@ class ChatFragment : Fragment() {
 
     private val otherUserId: Long by lazy { arguments?.getLong(ARG_OTHER_ID) ?: 0L }
     private val otherNickname: String by lazy { arguments?.getString(ARG_OTHER_NICK).orEmpty() }
-    private val currentUserId: Long by lazy { ScmAuthStore.session().userId }
+    private val currentUserId: Long by lazy { AppServices.auth.currentUserId() }
 
     private lateinit var container: LinearLayout
     private lateinit var scroll: ScrollView
@@ -68,7 +69,7 @@ class ChatFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         // 进页门禁：未登录跳 SCM 登录（把本页弹出栈防循环）。
-        if (!ScmAuthStore.isLoggedIn) {
+        if (!AppServices.auth.isLoggedIn()) {
             navigateToLoginGated(R.id.ScmLoginFragment, R.id.ChatFragment)
             return
         }
@@ -84,7 +85,10 @@ class ChatFragment : Fragment() {
         view.findViewById<TextView>(R.id.tv_chat_title).text = otherNickname.ifBlank { "聊天" }
         tvStatus.text = "连接中…"
 
-        btnSend.setOnClickListener { send() }
+        btnSend.setOnClickListener {
+            track("send")
+            send()
+        }
 
         // 边到边下 adjustResize 不生效：自行消费 IME inset，让输入栏随键盘上移；
         // 无键盘时退回导航栏高度，避免输入栏被手势导航条遮挡。
@@ -129,7 +133,10 @@ class ChatFragment : Fragment() {
                     tvContact.setOnClickListener(null)
                 } else {
                     tvContact.setTextColor(resources.getColor(R.color.sc_accent, null))
-                    tvContact.setOnClickListener { copyContact(profile.contact) }
+                    tvContact.setOnClickListener {
+                        track("copy_contact")
+                        copyContact(profile.contact)
+                    }
                 }
                 loadAvatar(conversationAvatar.ifBlank { profile.avatar })
             }
@@ -196,8 +203,6 @@ class ChatFragment : Fragment() {
 
     private fun connectSocket() {
         viewLifecycleOwner.lifecycleScope.launch {
-            // 登录用户用 chat/ws-ticket 一次性票据连接（替代真实 token 暴露在 URL）；
-            // ws 域名按地区动态解析（与官网一致），websocket/temp-token 是给匿名公开页用的，member 不走那条。
             val conn = withContext(Dispatchers.IO) {
                 runCatching {
                     val t = ChatClient.wsTicket() ?: return@runCatching null
@@ -344,6 +349,10 @@ class ChatFragment : Fragment() {
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("chat", feature)
+    }
 
     override fun onDestroyView() {
         socket?.close()

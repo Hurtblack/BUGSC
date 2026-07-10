@@ -17,7 +17,6 @@ object ScmAuthStore {
     private const val PREFS = "scm_auth"
 
     private lateinit var authSession: ScmAuthSession
-    private lateinit var api: ScmApi
 
     private val _loginState = MutableStateFlow(false)
     val loginState: StateFlow<Boolean> get() = _loginState
@@ -28,11 +27,9 @@ object ScmAuthStore {
         val kv = SharedPrefsKvStore(buildPrefs(context.applicationContext))
         authSession = ScmAuthSession(kv)
         authSession.ensureDeviceId()
-        api = ScmApi(UrlConnectionExecutor(), authSession)
         _loginState.value = authSession.isLoggedIn
     }
 
-    fun api(): ScmApi = api
     fun session(): ScmSession = authSession.session()
     val isLoggedIn: Boolean get() = authSession.isLoggedIn
     fun deviceId(): String = authSession.ensureDeviceId()

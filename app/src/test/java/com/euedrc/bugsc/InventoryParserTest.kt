@@ -53,6 +53,332 @@ class InventoryParserTest {
         assertTrue(item.canReclaim)
         assertEquals("Avenger Titan#120 Month Insurance", item.contains)
         assertEquals("https://robertsspaceindustries.com/media/titan.jpg", item.imageUrl)
+        assertEquals(1, item.subItems.size)
+        assertEquals("Avenger Titan", item.subItems.first().title)
+        assertEquals("Ship", item.subItems.first().kind)
+        assertEquals("https://robertsspaceindustries.com/media/sub.jpg", item.subItems.first().imageUrl)
+    }
+
+    @Test
+    fun parsesUpgradeDataFromHangarRow() {
+        val upgradeJson = "{&quot;id&quot;:1,&quot;match_items&quot;:[{&quot;id&quot;:4,&quot;name&quot;:&quot;Aurora MR&quot;}],&quot;target_items&quot;:[{&quot;id&quot;:102,&quot;name&quot;:&quot;Avenger Titan&quot;}]}"
+        val html = """
+            <html>
+              <body>
+                <article class="row">
+                  <input class="js-pledge-id" value="86420" />
+                  <input class="js-pledge-value" value="${'$'}15.00 USD" />
+                  <input class="js-pledge-name" value="Upgrade - Aurora MR to Avenger Titan Standard Edition" />
+                  <input class="js-upgrade-data" value="$upgradeJson" />
+                  <span class="image" style="background-image:url('/media/ccu.jpg');"></span>
+                  <span class="availability">Attributed</span>
+                  <span class="date-col">Created: April 05, 2026</span>
+                  <span class="title">Upgrade - Aurora MR to Avenger Titan Standard Edition</span>
+                </article>
+              </body>
+            </html>
+        """.trimIndent()
+
+        val item = InventoryParser.parseHangarItems(html, 1).first()
+
+        assertTrue(item.canUpgrade)
+        assertEquals("""{"id":1,"match_items":[{"id":4,"name":"Aurora MR"}],"target_items":[{"id":102,"name":"Avenger Titan"}]}""", item.upgradeData)
+        assertEquals("Aurora MR", item.ccuInfo?.fromShipName)
+        assertEquals("Avenger Titan", item.ccuInfo?.toShipName)
+        assertEquals(4, item.ccuInfo?.fromShipId)
+        assertEquals(102, item.ccuInfo?.toShipId)
+    }
+
+    @Test
+    fun parsesCreatedDateWhenDateColumnContainsNestedTags() {
+        val html = """
+            <html>
+              <body>
+                <article class="row">
+                  <input class="js-pledge-id" value="97531" />
+                  <input class="js-pledge-value" value="${'$'}5.00 USD" />
+                  <input class="js-pledge-name" value="Poster" />
+                  <span class="availability">Attributed</span>
+                  <span class="date-col"><span>Created:</span><strong>May 06, 2026</strong></span>
+                  <span class="title">Poster</span>
+                </article>
+              </body>
+            </html>
+        """.trimIndent()
+
+        val item = InventoryParser.parseHangarItems(html, 1).first()
+
+        assertEquals("2026年05月06日", item.date)
+    }
+
+    @Test
+    fun calculatesCcuPriceSummaryFromShipPricesAndMeltValue() {
+        val item = InventoryItem(
+            id = "86420",
+            name = "Upgrade - Aurora MR to Avenger Titan Standard Edition",
+            priceCents = 1500,
+            currentPriceCents = 1500,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo("Aurora MR", "Avenger Titan")
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = mapOf(
+                "Aurora Mk I MR" to 3000,
+                "Avenger Titan" to 6000
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(3000, summary.fromShipPriceCents)
+        assertEquals(6000, summary.toShipPriceCents)
+        assertEquals(3000, summary.standardUpgradeValueCents)
+        assertEquals(1500, summary.savingCents)
+    }
+
+    @Test
+    fun calculatesCcuPriceSummaryWhenHerculesTargetIncludesStarlifterSuffix() {
+        val item = InventoryItem(
+            id = "24680",
+            name = "Upgrade - Paladin to C2 Hercules Starlifter Standard Edition",
+            priceCents = 5000,
+            currentPriceCents = 5000,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo("Paladin", "C2 Hercules Starlifter")
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = mapOf(
+                "Paladin" to 35000,
+                "C2 Hercules" to 40000
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(35000, summary.fromShipPriceCents)
+        assertEquals(40000, summary.toShipPriceCents)
+        assertEquals(0, summary.savingCents)
+    }
+
+    @Test
+    fun calculatesCcuPriceSummaryWhenHerculesTargetUsesWbReversedName() {
+        val item = InventoryItem(
+            id = "24681",
+            name = "Upgrade - Paladin to Hercules Starlifter C2 Standard Edition",
+            priceCents = 5000,
+            currentPriceCents = 5000,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo("Paladin", "Hercules Starlifter C2")
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = mapOf(
+                "Paladin" to 35000,
+                "C2 Hercules" to 40000
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(35000, summary.fromShipPriceCents)
+        assertEquals(40000, summary.toShipPriceCents)
+        assertEquals(0, summary.savingCents)
+    }
+
+    @Test
+    fun calculatesCcuPriceSummaryWithChineseAliasesWithoutBlankNameCollision() {
+        val item = InventoryItem(
+            id = "24682",
+            name = "Upgrade - 圣骑士 to 大力神 C2 Standard Edition",
+            priceCents = 5000,
+            currentPriceCents = 5000,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo("圣骑士", "大力神 C2")
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = listOf(
+                InventoryShipPrice(null, "圣骑士", 35000),
+                InventoryShipPrice(null, "徘徊者", 44000),
+                InventoryShipPrice(null, "大力神 C2", 40000)
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(35000, summary.fromShipPriceCents)
+        assertEquals(40000, summary.toShipPriceCents)
+        assertEquals(0, summary.savingCents)
+    }
+
+    @Test
+    fun expandsShipPricesWithChineseAliasesUsingNormalizedEnglishNames() {
+        val prices = InventoryShipPriceAliases.expand(
+            prices = listOf(
+                InventoryShipPrice(282, "Paladin", 35000),
+                InventoryShipPrice(162, "C2 Hercules", 40000)
+            ),
+            aliases = mapOf(
+                "Paladin" to "圣骑士",
+                "C2 Hercules Starlifter" to "大力神 C2"
+            )
+        )
+
+        assertEquals(35000, prices.first { it.name == "圣骑士" }.priceCents)
+        assertEquals(40000, prices.first { it.name == "大力神 C2" }.priceCents)
+        assertEquals(null, prices.first { it.name == "圣骑士" }.id)
+        assertEquals(null, prices.first { it.name == "大力神 C2" }.id)
+    }
+
+    @Test
+    fun calculatesCcuPriceSummaryWhenNovaIncludesTankSuffix() {
+        val item = InventoryItem(
+            id = "13579",
+            name = "Upgrade - Nova Tank to RAFT Standard Edition",
+            priceCents = 7000,
+            currentPriceCents = 7000,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo("Nova Tank", "RAFT")
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = mapOf(
+                "Nova" to 12000,
+                "RAFT" to 19000
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(12000, summary.fromShipPriceCents)
+        assertEquals(19000, summary.toShipPriceCents)
+        assertEquals(0, summary.savingCents)
+    }
+
+    @Test
+    fun calculatesCcuPriceSummaryByShipIdsWhenTargetNameIsAmbiguous() {
+        val item = InventoryItem(
+            id = "112233",
+            name = "Upgrade - Prowler to 600i Standard Edition",
+            priceCents = 3500,
+            currentPriceCents = 3500,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo(
+                fromShipName = "Prowler",
+                toShipName = "600i",
+                fromShipId = 117,
+                toShipId = 141
+            )
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = listOf(
+                InventoryShipPrice(117, "Prowler", 44000),
+                InventoryShipPrice(140, "600i Touring", 43500),
+                InventoryShipPrice(141, "600i Explorer", 47500)
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(44000, summary.fromShipPriceCents)
+        assertEquals(47500, summary.toShipPriceCents)
+        assertEquals(0, summary.savingCents)
+    }
+
+    @Test
+    fun fallsBackToShipNameWhenUpgradeDataIdDoesNotMatchShipName() {
+        val item = InventoryItem(
+            id = "445566",
+            name = "Upgrade - Carrack to 600i Explorer Standard Edition",
+            priceCents = 16500,
+            currentPriceCents = 16500,
+            status = "Attributed",
+            date = "",
+            insurance = "",
+            contains = "",
+            imageUrl = "",
+            page = 1,
+            canGift = true,
+            canReclaim = true,
+            canUpgrade = true,
+            ccuInfo = InventoryCcuInfo(
+                fromShipName = "Carrack",
+                toShipName = "600i Explorer",
+                fromShipId = 64,
+                toShipId = 141
+            )
+        )
+
+        val summary = InventoryCcuPriceCalculator.summarize(
+            item = item,
+            ccuInfo = item.ccuInfo!!,
+            shipPrices = listOf(
+                InventoryShipPrice(62, "Carrack", 60000),
+                InventoryShipPrice(64, "Gladiator", 16500),
+                InventoryShipPrice(141, "600i Explorer", 47500)
+            )
+        )
+
+        requireNotNull(summary)
+        assertEquals(60000, summary.fromShipPriceCents)
+        assertEquals(47500, summary.toShipPriceCents)
     }
 
     @Test

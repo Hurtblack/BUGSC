@@ -15,6 +15,7 @@ import com.euedrc.bugsc.ImageLoader
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.requireScmLogin
 import com.euedrc.bugsc.ui.ImagePreviewDialog
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +26,7 @@ import java.util.Locale
 
 class MarketFragment : Fragment() {
 
-    private val client = ScmMarketClient()
+    private val marketOrders get() = AppServices.marketOrders
 
     private lateinit var tvTotal: TextView
     private lateinit var etSearch: EditText
@@ -48,7 +49,6 @@ class MarketFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        AnalyticsTracker.get(requireContext()).trackPageView("market")
 
         tvTotal = view.findViewById(R.id.tv_total)
         etSearch = view.findViewById(R.id.et_search)
@@ -62,12 +62,19 @@ class MarketFragment : Fragment() {
         scrollView = view.findViewById(R.id.scroll_view)
 
         view.findViewById<View>(R.id.btn_market_create).setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("market", "create_order")
             requireScmLogin {
                 findNavController().navigate(R.id.MarketOrderEditFragment)
             }
         }
-        btnTabSell.setOnClickListener { switchTab(TAB_SELL) }
-        btnTabBuy.setOnClickListener { switchTab(TAB_BUY) }
+        btnTabSell.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("market", "tab_sell")
+            switchTab(TAB_SELL)
+        }
+        btnTabBuy.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("market", "tab_buy")
+            switchTab(TAB_BUY)
+        }
         btnSearch.setOnClickListener { doSearch() }
         etSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { doSearch(); true } else false
@@ -114,6 +121,7 @@ class MarketFragment : Fragment() {
     }
 
     private fun loadMore() {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("market", "load_more")
         currentPage++
         btnLoadMore.text = "加载中…"
         btnLoadMore.isEnabled = false
@@ -126,7 +134,7 @@ class MarketFragment : Fragment() {
         val keyword = etSearch.text.toString().trim()
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { client.fetchPage(currentTab, currentPage, PAGE_SIZE, keyword) }
+                runCatching { marketOrders.fetchPage(currentTab, currentPage, PAGE_SIZE, keyword) }
             }
             isLoading = false
             result.onSuccess { page ->

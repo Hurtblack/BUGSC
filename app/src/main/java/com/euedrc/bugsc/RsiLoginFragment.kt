@@ -11,6 +11,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -61,13 +62,23 @@ class RsiLoginFragment : Fragment() {
         client = RsiInventoryClient(loadSession())
 
         btnLogin.setOnClickListener {
+            track(
+                when {
+                    pendingSecondStep -> "submit_second_step"
+                    pendingCaptcha -> "submit_captcha"
+                    else -> "login"
+                },
+            )
             when {
                 pendingSecondStep -> submitSecondStepCode()
                 pendingCaptcha -> submitCaptcha()
                 else -> login()
             }
         }
-        ivCaptcha.setOnClickListener { loadCaptchaImage() }
+        ivCaptcha.setOnClickListener {
+            track("refresh_captcha")
+            loadCaptchaImage()
+        }
     }
 
     private fun login() {
@@ -221,6 +232,10 @@ class RsiLoginFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         scope.cancel()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("rsi_login", feature)
     }
 
     companion object {

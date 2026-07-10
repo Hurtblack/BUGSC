@@ -14,7 +14,7 @@ import java.net.URL
  * 采矿数据仓库 —— 一次性从 assets / filesDir 缓存加载 5 个 JSON, 内建多套索引,
  * 提供面向 UI 的查询 API。
  *
- * 数据来源: sm.scmdb.net (英文主体) + flowcld SCM (中文翻译) + 手工地名表,
+ * 数据来源: sm.scmdb.net (英文主体) + SCM 中文翻译 + 手工地名表,
  * 由 tools/export_mining 系列脚本生成。
  *
  * 读取优先级 (仿 BlueprintDataRepository):

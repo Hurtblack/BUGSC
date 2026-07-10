@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.databinding.FragmentShipLoadoutBinding
 
 class ShipLoadoutFragment : Fragment() {
@@ -68,12 +69,30 @@ class ShipLoadoutFragment : Fragment() {
                 "${ShipFitDisplay.powerGroupLabel(group.first)} ${allocations.getOrNull(index) ?: 0}/${group.second}"
             }.joinToString(" | ")
         }
-        binding.btnAddSlot.setOnClickListener { addSlotConfig() }
-        binding.btnResetDefault.setOnClickListener { applyDefaultTemplate() }
-        binding.btnGenerate.setOnClickListener { generateCode() }
-        binding.btnDecode.setOnClickListener { decodeCode() }
-        binding.btnCopyCode.setOnClickListener { copyCode() }
-        binding.btnPasteCode.setOnClickListener { pasteCode() }
+        binding.btnAddSlot.setOnClickListener {
+            track("add_slot")
+            addSlotConfig()
+        }
+        binding.btnResetDefault.setOnClickListener {
+            track("reset_default")
+            applyDefaultTemplate()
+        }
+        binding.btnGenerate.setOnClickListener {
+            track("generate_code")
+            generateCode()
+        }
+        binding.btnDecode.setOnClickListener {
+            track("decode_code")
+            decodeCode()
+        }
+        binding.btnCopyCode.setOnClickListener {
+            track("copy_code")
+            copyCode()
+        }
+        binding.btnPasteCode.setOnClickListener {
+            track("paste_code")
+            pasteCode()
+        }
     }
 
     private fun refreshSlots() {
@@ -355,6 +374,10 @@ class ShipLoadoutFragment : Fragment() {
 
     private fun toast(msg: String) {
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("ship_loadout", feature)
     }
 
     override fun onDestroyView() {

@@ -14,6 +14,7 @@ import android.widget.Spinner
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.data.Bug
 import com.euedrc.bugsc.data.BugRepository
 import com.euedrc.bugsc.data.Hardware
@@ -59,8 +60,14 @@ class BugSubmitFragment : Fragment() {
         btnSubmitIc = view.findViewById(R.id.btn_submit_ic)
 
         setupSpinners()
-        btnSubmit.setOnClickListener { onSubmit() }
-        btnSubmitIc.setOnClickListener { onSubmitToIssueCouncil() }
+        btnSubmit.setOnClickListener {
+            track("submit_local")
+            onSubmit()
+        }
+        btnSubmitIc.setOnClickListener {
+            track("submit_issue_council")
+            onSubmitToIssueCouncil()
+        }
     }
 
     private fun setupSpinners() {
@@ -131,6 +138,10 @@ class BugSubmitFragment : Fragment() {
                 cpuVendors = listOf(CPU_OPTIONS[spinnerCpu.selectedItemPosition])
             )
         )
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("bug_submit", feature)
     }
 
     companion object {

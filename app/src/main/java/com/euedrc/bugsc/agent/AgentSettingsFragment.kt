@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,8 +68,14 @@ class AgentSettingsFragment : Fragment() {
         rgProvider.setOnCheckedChangeListener { _, _ ->
             if (!binding) applySelectedPreset()
         }
-        view.findViewById<Button>(R.id.btn_agent_save).setOnClickListener { save() }
-        view.findViewById<Button>(R.id.btn_agent_test).setOnClickListener { testConnection() }
+        view.findViewById<Button>(R.id.btn_agent_save).setOnClickListener {
+            track("save")
+            save()
+        }
+        view.findViewById<Button>(R.id.btn_agent_test).setOnClickListener {
+            track("test_connection")
+            testConnection()
+        }
         bind()
     }
 
@@ -153,6 +160,7 @@ class AgentSettingsFragment : Fragment() {
     }
 
     private fun applySelectedPreset() {
+        track("change_provider")
         val preset = AgentSettingsStore.providerPreset(selectedProviderId())
         if (!preset.exposesAdvancedSettings) {
             etModel.setText(preset.defaultModel)
@@ -205,5 +213,9 @@ class AgentSettingsFragment : Fragment() {
 
     private fun modelOptionButtons(): List<RadioButton> {
         return listOf(rbModelOption1, rbModelOption2)
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("agent_settings", feature)
     }
 }

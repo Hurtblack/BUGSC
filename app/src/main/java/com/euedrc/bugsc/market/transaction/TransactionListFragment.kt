@@ -15,6 +15,8 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.requireScmLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,7 +25,7 @@ import java.text.NumberFormat
 import java.util.Locale
 
 class TransactionListFragment : Fragment() {
-    private val client = TransactionClient()
+    private val transactions get() = AppServices.transactions
     private lateinit var container: LinearLayout
     private lateinit var status: TextView
     private lateinit var more: Button
@@ -51,12 +53,16 @@ class TransactionListFragment : Fragment() {
         filterButtons.forEach { (button, value) ->
             button.setOnClickListener {
                 if (filter == value) return@setOnClickListener
+                track("filter_${value.name.lowercase(Locale.US)}")
                 filter = value
                 updateFilterStyle()
                 loadFirst()
             }
         }
-        more.setOnClickListener { loadPage(pageNo + 1) }
+        more.setOnClickListener {
+            track("load_more")
+            loadPage(pageNo + 1)
+        }
         updateFilterStyle()
         requireScmLogin { loadFirst() }
     }
@@ -87,7 +93,7 @@ class TransactionListFragment : Fragment() {
         status.text = "正在加载..."
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { client.page(page, transactionStatus = filter.apiStatus) }
+                runCatching { transactions.page(page, transactionStatus = filter.apiStatus) }
             }
             loading = false
             result.onFailure {
@@ -123,6 +129,7 @@ class TransactionListFragment : Fragment() {
         ))
         addView(label("${record.transactionStatusLabel} · ${record.createTime}", 12f, resources.getColor(R.color.sc_warn, null)))
         setOnClickListener {
+            track("open_transaction_detail")
             findNavController().navigate(
                 R.id.TransactionDetailFragment,
                 bundleOf("transactionNumber" to record.transactionNumber),
@@ -134,5 +141,9 @@ class TransactionListFragment : Fragment() {
         text = value
         textSize = size
         setTextColor(color)
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("transactions", feature)
     }
 }

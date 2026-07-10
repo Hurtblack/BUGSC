@@ -210,13 +210,13 @@ class RsiInventoryTool(
     override val parameters: List<AgentToolParameter> = listOf(
         AgentToolParameter("query", "可选：库存关键词，中英文均可，例如 瑞伦、Railen、WB、CCU、陆龟", required = false),
         AgentToolParameter("type", "可选：all、ccu、ship、package、paint、item，默认 all", required = false),
-        AgentToolParameter("limit", "可选：最多返回条数，默认 12，最大 30", required = false),
+        AgentToolParameter("limit", "可选：最多返回条数，默认 20，最大 80", required = false),
     )
 
     override suspend fun run(call: AgentToolCall): AgentToolResult {
         val query = call.args["query"].orEmpty().trim()
         val type = call.args["type"].orEmpty().ifBlank { "all" }.lowercase(Locale.US)
-        val limit = call.args["limit"].orEmpty().toIntOrNull()?.coerceIn(1, 30) ?: 12
+        val limit = call.args["limit"].orEmpty().toIntOrNull()?.coerceIn(1, 80) ?: 20
         val aliases = provider.shipAliases()
         val allItems = provider.loadItems()
         if (allItems.isEmpty()) {
@@ -577,6 +577,7 @@ private data class AppCapability(
 
 private val APP_CAPABILITIES = listOf(
     AppCapability("飞船资料", "search_ship", "查询船只中文名、英文名、尺寸、货仓、槽位等本地资料", "只读"),
+    AppCapability("线上飞船资料", "search_online_ship / get_online_ship_detail", "查询 SCAPI 线上飞船、挂点和完整详情", "只读"),
     AppCapability("矿物资料", "search_mining", "查询矿物属性和常见地点", "只读"),
     AppCapability("蓝图资料", "search_blueprint / search_scm_blueprint", "查询本地与 SCM 蓝图、材料、制作时间和来源", "只读"),
     AppCapability("任务资料", "search_mission", "查询任务、奖励、阵营和蓝图来源", "只读"),

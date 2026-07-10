@@ -44,7 +44,6 @@ class WbFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        AnalyticsTracker.get(requireContext()).trackPageView("daily_wb")
         repo = WbRepository(requireContext())
         btnSync = view.findViewById(R.id.btn_wb_sync)
         tvUpdated = view.findViewById(R.id.tv_wb_updated)

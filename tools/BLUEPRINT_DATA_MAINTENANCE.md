@@ -16,6 +16,11 @@ App 运行时**不依赖任何第三方站点**：默认读本地（filesDir 缓
 | `scm_translations.json` | 英文名 → 中文名 | SCM 站点 | itemNameEn |
 | `scm_blueprint_hints.json` | 配方线索（简化 min-max）| SCM 站点 | itemNameEn |
 
+| 文件（assets/shipfit/） | 内容 | 来源 | 对照 key |
+|----|----|----|-----|
+| `uex_shipfit_dataset.json` | 飞船基础资料 + 组件列表；飞船可带 `sale_price_cents` 售卖价字段 | UEX Corp API + RSI 价格快照 | ship name / slug |
+| `rsi_ship_prices.json` | RSI 升级商店飞船 MSRP/售卖价快照；含少量手工补价 | RSI pledge store upgrade GraphQL | ship name |
+
 所有文件顶层都有 `version`（整数）。App 用它判断是否需要下载新数据。
 
 > **数据源分工**：
@@ -74,6 +79,25 @@ python3 tools/export_scm_data.py --version 2 --game-version 4.2.0
 <baseUrl>/item_base_stats.json
 <baseUrl>/scm_translations.json
 <baseUrl>/scm_blueprint_hints.json
+```
+
+### 2.5 拉取飞船售卖价（RSI，Shipfit 数据维护）
+
+```bash
+python3 tools/export_rsi_ship_prices.py
+```
+
+- 从 `https://robertsspaceindustries.com/pledge-store/api/upgrade/graphql` 抓 RSI 升级商店 `ships` 列表。
+- 生成 `app/src/main/assets/shipfit/rsi_ship_prices.json`，字段单位是**美分**：`30000` 表示 `$300`。
+- 同步把匹配到的 `sale_price_cents` 写回 `uex_shipfit_dataset.json` 的对应飞船条目。
+- 售卖价优先取非 Warbond 的标准 SKU；没有 SKU 时回退 `msrp`。
+- 升级商店不返回的船只能靠手工维护。当前手工补价：`F8C Lightning = 30000`、
+  `Javelin = 300000`、`Kraken = 200000`。
+
+如果重新拉 UEX shipfit 全量数据，脚本会自动读取上一步的价格快照并合并：
+
+```bash
+python3 tools/export_uex_shipfit.py
 ```
 
 ### 关键规则

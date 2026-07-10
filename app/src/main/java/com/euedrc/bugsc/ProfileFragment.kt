@@ -11,11 +11,11 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
-import com.euedrc.bugsc.databinding.FragmentProfileBinding
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.chat.ChatUnreadStore
-import com.euedrc.bugsc.scm.AppMemberUserInfoRespVO
-import com.euedrc.bugsc.scm.ScmAuthStore
-import com.euedrc.bugsc.scm.ScmClient
+import com.euedrc.bugsc.data.AppServices
+import com.euedrc.bugsc.data.AppUserProfile
+import com.euedrc.bugsc.databinding.FragmentProfileBinding
 import com.euedrc.bugsc.scm.ScmPasswordFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,6 +28,7 @@ class ProfileFragment : Fragment() {
 
     private var _binding: FragmentProfileBinding? = null
     private val binding get() = _binding!!
+    private val auth get() = AppServices.auth
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
@@ -38,29 +39,48 @@ class ProfileFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding.btnRsiLogin.setOnClickListener {
+            track("rsi_login")
             findNavController().navigate(R.id.RsiLoginFragment, bundleOf(ARG_RETURN_DEST to 0))
         }
-        binding.btnRsiLogout.setOnClickListener { logoutRsi() }
-        binding.btnRsiCopy.setOnClickListener { copyRsiReferral() }
+        binding.btnRsiLogout.setOnClickListener {
+            track("rsi_logout")
+            logoutRsi()
+        }
+        binding.btnRsiCopy.setOnClickListener {
+            track("copy_rsi_referral")
+            copyRsiReferral()
+        }
 
         binding.btnScmLogin.setOnClickListener {
+            track("scm_login")
             findNavController().navigate(R.id.ScmLoginFragment, bundleOf(ARG_RETURN_DEST to 0))
         }
         binding.btnScmRegister.setOnClickListener {
+            track("scm_register")
             findNavController().navigate(R.id.ScmRegisterFragment, bundleOf(ARG_RETURN_DEST to 0))
         }
         binding.btnScmChangepw.setOnClickListener {
+            track("scm_change_password")
             findNavController().navigate(R.id.ScmPasswordFragment, bundleOf("mode" to ScmPasswordFragment.MODE_CHANGE))
         }
-        binding.btnScmLogout.setOnClickListener { logoutScm() }
-        binding.btnScmSignin.setOnClickListener { doSignIn() }
+        binding.btnScmLogout.setOnClickListener {
+            track("scm_logout")
+            logoutScm()
+        }
+        binding.btnScmSignin.setOnClickListener {
+            track("scm_sign_in")
+            doSignIn()
+        }
         binding.btnScmOrders.setOnClickListener {
+            track("open_my_orders")
             findNavController().navigate(R.id.MyMarketOrdersFragment)
         }
         binding.btnScmTransactions.setOnClickListener {
+            track("open_transactions")
             findNavController().navigate(R.id.TransactionListFragment)
         }
         binding.btnScmMessages.setOnClickListener {
+            track("open_messages")
             findNavController().navigate(R.id.ChatConversationListFragment)
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -72,10 +92,22 @@ class ProfileFragment : Fragment() {
         }
 
         binding.tvVersion.text = "v${currentVersionName()}"
-        binding.rowPrivacy.setOnClickListener { navigateLegal(LegalDocs.PRIVACY, "隐私政策") }
-        binding.rowAgreement.setOnClickListener { navigateLegal(LegalDocs.AGREEMENT, "用户协议") }
-        binding.rowDisclaimer.setOnClickListener { navigateLegal(LegalDocs.DISCLAIMER, "免责声明") }
-        binding.btnCheckUpdate.setOnClickListener { checkForUpdates() }
+        binding.rowPrivacy.setOnClickListener {
+            track("open_privacy")
+            navigateLegal(LegalDocs.PRIVACY, "隐私政策")
+        }
+        binding.rowAgreement.setOnClickListener {
+            track("open_agreement")
+            navigateLegal(LegalDocs.AGREEMENT, "用户协议")
+        }
+        binding.rowDisclaimer.setOnClickListener {
+            track("open_disclaimer")
+            navigateLegal(LegalDocs.DISCLAIMER, "免责声明")
+        }
+        binding.btnCheckUpdate.setOnClickListener {
+            track("check_update")
+            checkForUpdates()
+        }
     }
 
     override fun onResume() {
@@ -158,7 +190,7 @@ class ProfileFragment : Fragment() {
     // ---- SCM 账号卡 ----
 
     private fun renderScmCard() {
-        val loggedIn = ScmAuthStore.isLoggedIn
+        val loggedIn = auth.isLoggedIn()
         binding.btnScmLogin.visibility = if (loggedIn) View.GONE else View.VISIBLE
         binding.btnScmRegister.visibility = if (loggedIn) View.GONE else View.VISIBLE
         binding.btnScmChangepw.visibility = if (loggedIn) View.VISIBLE else View.GONE
@@ -172,39 +204,22 @@ class ProfileFragment : Fragment() {
 
         if (!loggedIn) return
 
-        val userId = ScmAuthStore.session().userId
-        val prefs = scmProfilePrefs()
-        val cached = prefs.getString(scmProfileKey(userId), null)
-            ?.let(AppMemberUserInfoRespVO::parseCache)
-        if (cached != null) {
-            bindScmInfo(cached)
-        }
-
         viewLifecycleOwner.lifecycleScope.launch {
-            val info = withContext(Dispatchers.IO) { runCatching { ScmClient.getUserInfo() }.getOrNull() }
+            val info = withContext(Dispatchers.IO) { runCatching { auth.getUserInfo() }.getOrNull() }
             if (_binding == null) return@launch
             if (info == null) {
-                // 401 走 refresh 仍失败 → 视为未登录
-                if (!ScmAuthStore.isLoggedIn) renderScmCard()
+                if (!auth.isLoggedIn()) renderScmCard()
                 return@launch
             }
-            if (info != cached) {
-                prefs.edit().putString(scmProfileKey(info.id), info.toCacheJson()).apply()
-                bindScmInfo(info)
-            }
+            bindScmInfo(info)
         }
         loadSignInSummary()
     }
 
-    private fun scmProfilePrefs() =
-        requireContext().getSharedPreferences("scm_profile", Context.MODE_PRIVATE)
-
-    private fun scmProfileKey(userId: Long): String = "profile_$userId"
-
     private fun loadSignInSummary() {
         binding.tvScmSignin.text = "签到信息加载中…"
         viewLifecycleOwner.lifecycleScope.launch {
-            val s = withContext(Dispatchers.IO) { runCatching { ScmClient.signInSummary() }.getOrNull() }
+            val s = withContext(Dispatchers.IO) { runCatching { auth.signInSummary() }.getOrNull() }
             if (_binding == null) return@launch
             if (s == null) {
                 binding.tvScmSignin.text = "连续签到 —"
@@ -227,7 +242,11 @@ class ProfileFragment : Fragment() {
         binding.btnScmSignin.isEnabled = false
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { ScmClient.signIn() }.getOrElse { com.euedrc.bugsc.scm.ScmResult(false, it.message ?: "网络错误", -1) }
+                runCatching {
+                    auth.signIn()
+                }.getOrElse {
+                    com.euedrc.bugsc.scm.ScmResult(false, it.message ?: "网络错误", -1)
+                }
             }
             if (_binding == null) return@launch
             if (result.success) {
@@ -240,35 +259,16 @@ class ProfileFragment : Fragment() {
         }
     }
 
-    private fun bindScmInfo(info: AppMemberUserInfoRespVO) {
+    private fun bindScmInfo(info: AppUserProfile) {
         binding.tvScmNickname.text = info.nickname.ifBlank { "SCM 用户" }
-        binding.tvScmEmail.text = info.email.ifBlank { "ID: ${info.id}" }
+        binding.tvScmEmail.text = "ID: ${info.userId}"
 
-        if (info.mark.isNotBlank()) {
-            binding.tvScmMark.text = info.mark
-            binding.tvScmMark.visibility = View.VISIBLE
-        } else {
-            binding.tvScmMark.visibility = View.GONE
-        }
-
-        val rsi = when (info.rsiAccurate) {
-            1 -> "有效"
-            0 -> "失效"
-            else -> "未验证"
-        }
+        binding.tvScmMark.visibility = View.GONE
         val rows = binding.containerScmStats
         rows.removeAllViews()
-        addStatRow(rows, "信誉积分", "${info.reputationPoint}")
-        addStatRow(rows, "订单上限", "${info.orderLimit}")
-        addStatRow(rows, "赞助等级", "L${info.sponsorLevel}")
-        addStatRow(rows, "RSI 账号", rsi)
-        addStatRow(rows, "出售订单", "${info.sellOrderCount}")
-        addStatRow(rows, "收购订单", "${info.buyOrderCount}")
-        if (info.groups.isNotEmpty()) addStatRow(rows, "分组", info.groups.joinToString(" · "))
-        if (info.organization.isNotBlank()) addStatRow(rows, "所属舰队", info.organization)
-        if (info.createTime > 0) addStatRow(rows, "注册时间", formatDate(info.createTime))
+        addStatRow(rows, "账号状态", "已登录")
 
-        loadAvatarInto(info.avatar, binding.ivScmAvatar)
+        loadAvatarInto(info.avatarUrl, binding.ivScmAvatar)
     }
 
     /** 一行键值：左淡色标签，右亮色加粗数值。 */
@@ -339,11 +339,10 @@ class ProfileFragment : Fragment() {
     private fun logoutScm() {
         binding.btnScmLogout.isEnabled = false
         viewLifecycleOwner.lifecycleScope.launch {
-            withContext(Dispatchers.IO) { runCatching { ScmClient.logout() } }
+            withContext(Dispatchers.IO) { runCatching { auth.logout() } }
             if (_binding == null) return@launch
             binding.btnScmLogout.isEnabled = true
             ChatUnreadStore.clear()
-            scmProfilePrefs().edit().clear().apply()
             renderScmCard()
             toast("已退出 SCM 登录")
         }
@@ -388,6 +387,10 @@ class ProfileFragment : Fragment() {
 
     private fun toast(message: String) {
         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("profile", feature)
     }
 
     override fun onDestroyView() {

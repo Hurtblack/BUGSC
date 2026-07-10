@@ -16,11 +16,11 @@ import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.ImageLoader
 import com.euedrc.bugsc.R
 import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.requireScmLogin
 import com.euedrc.bugsc.market.transaction.AddressBranch
 import com.euedrc.bugsc.market.transaction.AddressChoice
 import com.euedrc.bugsc.market.transaction.AddressTree
-import com.euedrc.bugsc.market.transaction.TransactionClient
 import com.euedrc.bugsc.market.transaction.TransactionContractException
 import com.euedrc.bugsc.market.transaction.TransactionDraft
 import com.euedrc.bugsc.market.transaction.TransactionRules
@@ -36,8 +36,8 @@ import java.util.*
 
 class MarketDetailFragment : Fragment() {
 
-    private val client = ScmMarketClient()
-    private val transactionClient = TransactionClient()
+    private val marketOrders get() = AppServices.marketOrders
+    private val transactions get() = AppServices.transactions
     private var selectedLocationId: Long? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
@@ -49,7 +49,7 @@ class MarketDetailFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             val order = withContext(Dispatchers.IO) {
-                runCatching { client.fetchDetail(orderNumber) }.getOrNull()
+                runCatching { marketOrders.fetchDetail(orderNumber) }.getOrNull()
             }
             if (order == null) {
                 Toast.makeText(context, "加载订单详情失败", Toast.LENGTH_SHORT).show()
@@ -105,6 +105,7 @@ class MarketDetailFragment : Fragment() {
             tvLocation.text = "交易地点：${order.locationName} ↗"
             tvLocation.setTextColor(resources.getColor(R.color.sc_accent, null))
             tvLocation.setOnClickListener {
+                AnalyticsTracker.get(requireContext()).trackFeatureClick("market_detail", "open_location")
                 runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(order.locationUrl))) }
             }
         } else {
@@ -127,13 +128,14 @@ class MarketDetailFragment : Fragment() {
         }
 
         val btnContact = view.findViewById<Button>(R.id.btn_contact)
-        val myId = if (com.euedrc.bugsc.scm.ScmAuthStore.isLoggedIn) com.euedrc.bugsc.scm.ScmAuthStore.session().userId else 0L
+        val myId = if (AppServices.auth.isLoggedIn()) AppServices.auth.currentUserId() else 0L
         if (order.creatorId <= 0 || (myId != 0L && order.creatorId == myId)) {
             btnContact.visibility = View.GONE
             view.findViewById<View>(R.id.container_transaction_form).visibility = View.GONE
             btnGoMarket.visibility = View.GONE
         } else {
             btnContact.setOnClickListener {
+                AnalyticsTracker.get(requireContext()).trackFeatureClick("market_detail", "contact")
                 requireScmLogin {
                     findNavController().navigate(
                         R.id.ChatFragment,
@@ -180,6 +182,7 @@ class MarketDetailFragment : Fragment() {
         loadAddressSpinners(view)
         submit.text = if (order.isSell) "创建购买交易" else "创建出售交易"
         submit.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("market_detail", "create_transaction")
             requireScmLogin {
                 val validation = TransactionRules.validate(
                     quantityText = quantity.text.toString(),
@@ -221,7 +224,7 @@ class MarketDetailFragment : Fragment() {
         bindSpinner(station, "请先选择星体", emptyList()) {}
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { AddressTree.build(transactionClient.addressList()) }
+                runCatching { AddressTree.build(transactions.addressList()) }
             }
             result.onFailure {
                 selectedLocationId = null
@@ -295,11 +298,11 @@ class MarketDetailFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (transactionClient.checkOngoing(order.orderNumber)) {
-                        val existing = transactionClient.page(1, orderNumber = order.orderNumber).items.firstOrNull()
+                    if (transactions.checkOngoing(order.orderNumber)) {
+                        val existing = transactions.page(1, orderNumber = order.orderNumber).items.firstOrNull()
                         ExistingTransaction(existing?.transactionNumber.orEmpty())
                     } else {
-                        CreatedTransaction(transactionClient.create(draft).identifier)
+                        CreatedTransaction(transactions.create(draft).identifier)
                     }
                 }
             }
@@ -343,6 +346,7 @@ class MarketDetailFragment : Fragment() {
             .setNegativeButton("留在当前页", null)
         if (transactionNumber.isNotBlank()) {
             builder.setPositiveButton("查看详情") { _, _ ->
+                AnalyticsTracker.get(requireContext()).trackFeatureClick("market_detail", "open_transaction_detail")
                 findNavController().navigate(
                     R.id.TransactionDetailFragment,
                     bundleOf("transactionNumber" to transactionNumber),
@@ -350,6 +354,7 @@ class MarketDetailFragment : Fragment() {
             }
         } else {
             builder.setPositiveButton("我的交易") { _, _ ->
+                AnalyticsTracker.get(requireContext()).trackFeatureClick("market_detail", "open_transactions")
                 findNavController().navigate(R.id.TransactionListFragment)
             }
         }

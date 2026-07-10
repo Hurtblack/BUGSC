@@ -47,6 +47,6 @@ class AgentProfileTest {
 
         assertTrue(greeting.startsWith("我是 SCMobiGlas App 内置的 AI 助手"))
         assertFalse(greeting.contains("负责把 App 本地数据"))
-        assertTrue(greeting.contains("可以问我“我可以干嘛”来了解我的能力"))
+        assertTrue(greeting.contains("需要查船、矿物、蓝图、任务、市场行情或机库状态，直接告诉我目标就行"))
     }
 }

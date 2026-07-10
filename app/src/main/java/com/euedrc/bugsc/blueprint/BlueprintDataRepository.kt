@@ -43,7 +43,7 @@ class BlueprintDataRepository(private val context: Context) {
             .withItemNames(readShipFitAliases(), overrideExisting = false)
 
     /**
-     * 加载任务名英中翻译表（来自 flowcld SCM）。
+     * 加载任务名英中翻译表（来自 SCM）。
      * @return 英文任务名 → 中文任务名；找不到时返回空表（UI 回退英文）。
      */
     fun loadMissionTranslations(): Map<String, String> {

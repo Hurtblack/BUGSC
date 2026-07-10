@@ -62,7 +62,6 @@ class HangarTimerFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        AnalyticsTracker.get(requireContext()).trackPageView("hangar_timer")
         prefs = requireContext().getSharedPreferences("hangar_timer", Context.MODE_PRIVATE)
 
         statusBanner = view.findViewById(R.id.status_banner)
@@ -99,8 +98,14 @@ class HangarTimerFragment : Fragment() {
             AnalyticsTracker.get(requireContext()).trackFeatureClick("hangar_timer", "sync_remote")
             syncFromRemoteSources()
         }
-        btnShareCal.setOnClickListener { shareCalibration() }
-        btnApplyCal.setOnClickListener { applyCalibration() }
+        btnShareCal.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("hangar_timer", "share_calibration")
+            shareCalibration()
+        }
+        btnApplyCal.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("hangar_timer", "apply_calibration")
+            applyCalibration()
+        }
 
         loadAnchor()
     }

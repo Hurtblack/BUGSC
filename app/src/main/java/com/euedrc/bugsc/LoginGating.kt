@@ -5,8 +5,8 @@ import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.navOptions
 import android.os.Bundle
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.scm.LoginGate
-import com.euedrc.bugsc.scm.ScmAuthStore
 
 /** 登录页接收的导航参数：返回目标 destination id（0/缺省表示无，从 Profile 进入的场景）。 */
 const val ARG_RETURN_DEST = "returnDestId"
@@ -20,7 +20,7 @@ fun Fragment.requireRsiLogin(action: () -> Unit) {
 
 /** 已登录 → 直接执行；未登录 → 跳 SCM 登录页并带当前页作为返回目标。 */
 fun Fragment.requireScmLogin(action: () -> Unit) {
-    gateLogin(ScmAuthStore.isLoggedIn, R.id.ScmLoginFragment, action)
+    gateLogin(AppServices.auth.isLoggedIn(), R.id.ScmLoginFragment, action)
 }
 
 private fun Fragment.gateLogin(loggedIn: Boolean, loginDest: Int, action: () -> Unit) {

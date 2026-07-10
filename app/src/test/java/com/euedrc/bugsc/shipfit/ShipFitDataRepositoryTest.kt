@@ -19,6 +19,7 @@ class ShipFitDataRepositoryTest {
                   "name": "Railen",
                   "scu": 640,
                   "crew": "4",
+                  "sale_price_cents": 22500,
                   "size": {"length": 53, "width": 52, "height": 67},
                   "url_photo": "https://example.com/railen.jpg",
                   "url_store": "https://robertsspaceindustries.com/en/pledge/Standalone-Ships/Railen"
@@ -36,6 +37,7 @@ class ShipFitDataRepositoryTest {
         assertEquals("53/52/67m", ship.size)
         assertEquals("4", ship.crew)
         assertEquals("640 SCU", ship.cargo)
+        assertEquals(22500, ship.salePriceCents)
         assertTrue(ship.slots.isEmpty())
     }
 }

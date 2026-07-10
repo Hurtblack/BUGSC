@@ -1,11 +1,15 @@
 package com.euedrc.bugsc.agent
 
+import android.app.Dialog
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -20,17 +24,19 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
-import com.euedrc.bugsc.market.publish.MarketPublishClient
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.market.publish.MarketPublishJson
 import com.euedrc.bugsc.market.publish.PublishItemValue
-import com.euedrc.bugsc.market.transaction.TransactionClient
-import com.euedrc.bugsc.scm.ScmAuthStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import kotlin.math.max
 
@@ -46,8 +52,9 @@ class AgentChatFragment : Fragment() {
     private lateinit var settingsStore: AgentSettingsStore
     private lateinit var historyStore: AgentHistoryStore
     private val localProvider: LocalAgentDataProvider by lazy { LocalAgentDataProvider(requireContext()) }
-    private val marketPublishClient: MarketPublishClient by lazy { MarketPublishClient() }
-    private val transactionClient: TransactionClient by lazy { TransactionClient() }
+    private val marketPublish get() = AppServices.marketPublish
+    private val transactions get() = AppServices.transactions
+    private val auth get() = AppServices.auth
     private var conversationVersion: Long = 0L
     private var pendingOrderDraft: ScmOrderDraftResolution.Resolved? = null
     private var pendingOrderParse: ScmOrderDraftParseResult? = null
@@ -75,13 +82,25 @@ class AgentChatFragment : Fragment() {
         view.findViewById<TextView>(R.id.tv_agent_status).text = getString(R.string.agent_status_deepseek)
         view.findViewById<TextView>(R.id.tv_agent_tagline).text = profile.tagline
         view.findViewById<Button>(R.id.btn_agent_new_chat).setOnClickListener {
+            track("new_chat")
             startNewChat()
         }
+        view.findViewById<Button>(R.id.btn_agent_history).setOnClickListener {
+            track("open_history")
+            showConversationHistory()
+        }
         view.findViewById<Button>(R.id.btn_agent_settings).setOnClickListener {
+            track("open_settings")
             findNavController().navigate(R.id.AgentSettingsFragment)
         }
-        send.setOnClickListener { sendMessage() }
-        stop.setOnClickListener { cancelCurrentRun(showStopped = true) }
+        send.setOnClickListener {
+            track("send")
+            sendMessage()
+        }
+        stop.setOnClickListener {
+            track("stop")
+            cancelCurrentRun(showStopped = true)
+        }
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             val nav = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
@@ -197,7 +216,7 @@ class AgentChatFragment : Fragment() {
         historyStore.append(userMsg)
         addBubble(text, mine = true)
         input.setText("")
-        if (!ScmAuthStore.isLoggedIn) {
+        if (!auth.isLoggedIn()) {
             appendAssistantMessage("需要先登录 SCM，才能创建订单。")
             return
         }
@@ -209,11 +228,11 @@ class AgentChatFragment : Fragment() {
                         itemSearch = { keyword ->
                             ScmSearchTermExpander.expand(keyword, index)
                                 .asSequence()
-                                .map { marketPublishClient.searchItems(it) }
+                                .map { candidate -> kotlinx.coroutines.runBlocking { marketPublish.searchItems(candidate) } }
                                 .firstOrNull { it.isNotEmpty() }
                                 .orEmpty()
                         },
-                        addressList = { transactionClient.addressList() },
+                        addressList = { kotlinx.coroutines.runBlocking { transactions.addressList() } },
                     ).resolve(parsed)
                 }.getOrElse { ScmOrderDraftResolution.NeedMoreInfo(it.message ?: "订单草稿解析失败。") }
             }
@@ -239,10 +258,142 @@ class AgentChatFragment : Fragment() {
         cancelCurrentRun(showStopped = false)
         pendingOrderDraft = null
         pendingOrderParse = null
+        historyStore.archiveCurrentConversation()
         historyStore.clear()
         input.setText("")
         renderHistory()
         Toast.makeText(requireContext(), R.string.agent_new_chat_started, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showConversationHistory() {
+        val sessions = historyStore.loadArchivedSessions()
+        if (sessions.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.agent_history_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dialog = Dialog(requireContext())
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val panel = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.card_bg)
+            setPadding(dp(16), dp(16), dp(16), dp(14))
+        }
+        panel.addView(
+            TextView(requireContext()).apply {
+                text = getString(R.string.agent_history)
+                setTextColor("#d8eaf2".toColorInt())
+                textSize = 18f
+                typeface = Typeface.DEFAULT_BOLD
+            },
+        )
+        panel.addView(
+            TextView(requireContext()).apply {
+                text = getString(R.string.agent_history_recent_sessions, sessions.size)
+                setTextColor("#7c95a8".toColorInt())
+                textSize = 11f
+                typeface = Typeface.MONOSPACE
+                setPadding(0, dp(3), 0, dp(12))
+            },
+        )
+        val list = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        sessions.forEach { session ->
+            list.addView(historySessionRow(dialog, session))
+        }
+        panel.addView(
+            ScrollView(requireContext()).apply {
+                isFillViewport = false
+                addView(list)
+            },
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                minOf(resources.displayMetrics.heightPixels * 55 / 100, dp(420)),
+            ),
+        )
+        panel.addView(
+            Button(requireContext()).apply {
+                text = getString(R.string.agent_cancel)
+                isAllCaps = false
+                setTextColor("#21d4ff".toColorInt())
+                setBackgroundResource(R.drawable.button_outline_accent)
+                setOnClickListener { dialog.dismiss() }
+            },
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(12)
+            },
+        )
+        dialog.setContentView(panel)
+        dialog.show()
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 92 / 100),
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        )
+    }
+
+    private fun historySessionRow(dialog: Dialog, session: AgentConversationSession): View {
+        val row = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            isClickable = true
+            isFocusable = true
+            setBackgroundResource(R.drawable.agent_history_item_bg)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setOnClickListener {
+                track("restore_history")
+                dialog.dismiss()
+                restoreConversation(session.id)
+            }
+        }
+        row.addView(
+            TextView(requireContext()).apply {
+                text = session.title
+                setTextColor("#d8eaf2".toColorInt())
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                maxLines = 2
+            },
+        )
+        row.addView(
+            TextView(requireContext()).apply {
+                text = "${session.messages.size} 条消息 · ${formatSessionTime(session.updatedAt)}"
+                setTextColor("#7c95a8".toColorInt())
+                textSize = 11f
+                typeface = Typeface.MONOSPACE
+                setPadding(0, dp(4), 0, 0)
+            },
+        )
+        return row.apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(8)
+            }
+        }
+    }
+
+    private fun formatSessionTime(timestamp: Long): String =
+        if (timestamp <= 0L) {
+            "--"
+        } else {
+            SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(timestamp))
+        }
+
+    private fun restoreConversation(sessionId: String) {
+        conversationVersion += 1L
+        cancelCurrentRun(showStopped = false)
+        pendingOrderDraft = null
+        pendingOrderParse = null
+        historyStore.archiveCurrentConversation()
+        if (historyStore.restoreArchivedSession(sessionId)) {
+            input.setText("")
+            renderHistory()
+            Toast.makeText(requireContext(), R.string.agent_history_restored, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun buildRuntime(
@@ -250,19 +401,20 @@ class AgentChatFragment : Fragment() {
     ): AgentRuntime {
         val index = localProvider.entityIndex()
         val tools = AgentLocalSearchTools.create(localProvider, index) +
+            OnlineShipAgentTools.create(AppServices.shipOnline) +
             ScmAgentTools.create(entityIndex = index) +
             AppUtilityTools.create(requireContext()) +
             ScmOrderDraftTool(
                 state = draftState,
-                isLoggedIn = { ScmAuthStore.isLoggedIn },
+                isLoggedIn = { auth.isLoggedIn() },
                 itemSearch = { keyword ->
                     ScmSearchTermExpander.expand(keyword, index)
                         .asSequence()
-                        .map { marketPublishClient.searchItems(it) }
+                        .map { candidate -> kotlinx.coroutines.runBlocking { marketPublish.searchItems(candidate) } }
                         .firstOrNull { it.isNotEmpty() }
                         .orEmpty()
                 },
-                addressList = { transactionClient.addressList() },
+                addressList = { kotlinx.coroutines.runBlocking { transactions.addressList() } },
                 entityIndex = index,
             )
         return AgentRuntime(
@@ -386,6 +538,7 @@ class AgentChatFragment : Fragment() {
             text = "确认创建"
             isAllCaps = false
             setOnClickListener {
+                track("confirm_order_draft")
                 row.visibility = View.GONE
                 createPendingOrder(draft)
             }
@@ -394,6 +547,7 @@ class AgentChatFragment : Fragment() {
             text = "取消"
             isAllCaps = false
             setOnClickListener {
+                track("cancel_order_draft")
                 if (pendingOrderDraft == draft) pendingOrderDraft = null
                 pendingOrderParse = null
                 appendAssistantMessage("已取消创建订单。")
@@ -422,14 +576,14 @@ class AgentChatFragment : Fragment() {
                         price = requireNotNull(draft.parsed.unitPrice),
                         quality = draft.parsed.quality,
                     )
-                    marketPublishClient.createOrder(
+                    marketPublish.createOrder(
                         creatorType = requireNotNull(draft.parsed.creatorType),
                         locationId = draft.location.id,
                         status = draft.parsed.status,
                         expireTime = draft.parsed.expireTime,
                         items = listOf(item),
                     )
-                    marketPublishClient.ownOrders(1, creatorType = draft.parsed.creatorType)
+                    marketPublish.ownOrders(1, creatorType = draft.parsed.creatorType)
                         .let { MarketPublishJson.findCreatedOrderNumber(it, draft.parsed.creatorType, draft.item.itemName) }
                 }
             }
@@ -471,4 +625,8 @@ class AgentChatFragment : Fragment() {
         if (error is DeepSeekClientException) error.userMessage else getString(R.string.agent_request_failed)
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("agent", feature)
+    }
 }

@@ -11,6 +11,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppServices
+import com.euedrc.bugsc.data.AuthDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -18,6 +21,7 @@ import kotlinx.coroutines.withContext
 
 /** SCM 密码：mode=reset 忘密重置（邮箱+验证码+邮箱码+新密码）；mode=change 已登录改密（旧+新密码）。 */
 class ScmPasswordFragment : Fragment() {
+    private val auth get() = AppServices.auth
 
     private val mode: String get() = arguments?.getString("mode") ?: MODE_RESET
 
@@ -60,23 +64,32 @@ class ScmPasswordFragment : Fragment() {
             tvTitle.text = "重置密码"
             etOldPassword.visibility = View.GONE
             containerReset.visibility = View.VISIBLE
-            captchaView.onRequestRefresh = { loadCaptcha() }
+            captchaView.onRequestRefresh = {
+                track("refresh_captcha")
+                loadCaptcha()
+            }
             captchaView.onVerified = {
                 pendingVerification = it
                 tvStatus.text = "验证码已采集，可发送邮箱验证码"
             }
             loadCaptcha()
-            btnSendCode.setOnClickListener { sendCode() }
+            btnSendCode.setOnClickListener {
+                track("send_email_code")
+                sendCode()
+            }
         }
 
-        btnSubmit.setOnClickListener { submit() }
+        btnSubmit.setOnClickListener {
+            track(if (mode == MODE_CHANGE) "change_password" else "reset_password")
+            submit()
+        }
     }
 
     private fun loadCaptcha() {
         pendingVerification = null
         captchaView.showLoading()
         viewLifecycleOwner.lifecycleScope.launch {
-            val challenge = withContext(Dispatchers.IO) { runCatching { ScmClient.getCaptcha() }.getOrNull() }
+            val challenge = withContext(Dispatchers.IO) { runCatching { auth.getCaptcha() }.getOrNull() }
             if (challenge != null) captchaView.setChallenge(challenge)
             else captchaView.showError("验证码加载失败，点击换一张重试")
         }
@@ -93,8 +106,11 @@ class ScmPasswordFragment : Fragment() {
         tvStatus.text = "正在发送验证码…"
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { ScmClient.sendEmailCode(email, ScmClient.MAIL_TYPE_RESET, verification) }
-                    .getOrElse { ScmResult(false, it.message ?: "网络错误", -1) }
+                runCatching {
+                    auth.sendEmailCode(email, AuthDataSource.MAIL_TYPE_RESET, verification)
+                }.getOrElse {
+                    ScmResult(false, it.message ?: "网络错误", -1)
+                }
             }
             if (result.success) {
                 tvStatus.text = "验证码已发送，请查收邮箱"
@@ -125,16 +141,16 @@ class ScmPasswordFragment : Fragment() {
         if (mode == MODE_CHANGE) {
             val oldPassword = etOldPassword.text.toString()
             if (oldPassword.isEmpty()) { showError("请输入旧密码"); return }
-            runRequest("正在修改密码…") { ScmClient.changePassword(oldPassword, newPassword) }
+            runRequest("正在修改密码…") { auth.changePassword(oldPassword, newPassword) }
         } else {
             val email = etEmail.text.toString().trim()
             val code = etEmailCode.text.toString().trim()
             if (email.isEmpty() || code.isEmpty()) { showError("邮箱和邮箱验证码不能为空"); return }
-            runRequest("正在重置密码…") { ScmClient.resetPassword(email, code, newPassword) }
+            runRequest("正在重置密码…") { auth.resetPassword(email, code, newPassword) }
         }
     }
 
-    private fun runRequest(progress: String, block: () -> ScmResult) {
+    private fun runRequest(progress: String, block: suspend () -> ScmResult) {
         tvError.visibility = View.GONE
         tvStatus.text = progress
         btnSubmit.isEnabled = false
@@ -155,6 +171,10 @@ class ScmPasswordFragment : Fragment() {
     private fun showError(message: String) {
         tvError.text = message
         tvError.visibility = View.VISIBLE
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("scm_password", feature)
     }
 
     companion object {

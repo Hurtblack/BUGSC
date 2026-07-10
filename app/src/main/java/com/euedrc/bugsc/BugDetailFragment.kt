@@ -13,6 +13,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.euedrc.bugsc.data.Bug
 import com.euedrc.bugsc.data.BugRepository
 import com.google.android.material.chip.Chip
@@ -167,6 +168,7 @@ class BugDetailFragment : Fragment() {
     private fun setupButtons() {
         btnCopy.setOnClickListener {
             val b = bug ?: return@setOnClickListener
+            track("copy_solution")
             val lines = mutableListOf<String>()
             lines.add("标题：${b.title}")
             lines.add("解决步骤：")
@@ -180,6 +182,7 @@ class BugDetailFragment : Fragment() {
 
         btnShare.setOnClickListener {
             val b = bug ?: return@setOnClickListener
+            track("copy_share_code")
             val code = repository.exportBugShareCode(b.id)
             if (code == null) {
                 Toast.makeText(requireContext(), "分享码生成失败", Toast.LENGTH_SHORT).show()
@@ -192,6 +195,7 @@ class BugDetailFragment : Fragment() {
 
         btnFav.setOnClickListener {
             val b = bug ?: return@setOnClickListener
+            track("toggle_favorite")
             val isFav = repository.toggleFavorite(b.id)
             bug = repository.getBugById(b.id)
             updateFavButton()
@@ -213,5 +217,9 @@ class BugDetailFragment : Fragment() {
         if (timestamp <= 0) return "-"
         val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         return sdf.format(Date(timestamp))
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("bug_detail", feature)
     }
 }

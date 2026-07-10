@@ -13,16 +13,11 @@ import android.view.MotionEvent
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
-import androidx.lifecycle.findViewTreeLifecycleOwner
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.euedrc.bugsc.data.AppCaptchaPrompt
 
 /**
- * AJ-Captcha 文字点选验证码控件：显示原图 + 提示词，收集点击坐标换算回 310×155，
- * 集齐 wordList 长度后生成 captchaVerification 通过 [onVerified] 回调。
- * 登录 / 注册 / 发邮件三处复用；点错或失败由外部调 [showLoading] 后重新 [setChallenge]。
+ * Text-click captcha view. Public builds keep only the UI shell; backend-specific
+ * verification generation and checking live in private AuthDataSource implementations.
  */
 class ScmCaptchaView @JvmOverloads constructor(
     context: Context,
@@ -38,7 +33,7 @@ class ScmCaptchaView @JvmOverloads constructor(
     private val image: CaptchaImageView
     private val hint: TextView
 
-    private var challenge: CaptchaChallenge? = null
+    private var challenge: AppCaptchaPrompt? = null
     private val points = mutableListOf<CaptchaCoord.Point>()
     private var wordsPrompt: String = ""
 
@@ -93,7 +88,7 @@ class ScmCaptchaView @JvmOverloads constructor(
         prompt.text = message
     }
 
-    fun setChallenge(challenge: CaptchaChallenge) {
+    fun setChallenge(challenge: AppCaptchaPrompt) {
         this.challenge = challenge
         points.clear()
         image.clearMarks()
@@ -120,33 +115,8 @@ class ScmCaptchaView @JvmOverloads constructor(
         // 保留提示词，进度附在后面；只有换验证码（setChallenge）时才重置。
         prompt.text = "$wordsPrompt（已点 ${points.size}/${ch.wordList.size}）"
         if (points.size == ch.wordList.size) {
-            verifyWithServer(ch)
-        }
-    }
-
-    /** AJ-Captcha 标准两步：先 /check 标记通过，成功才把 captchaVerification 交给业务。 */
-    private fun verifyWithServer(ch: CaptchaChallenge) {
-        val pointJson = CaptchaChallenge.pointJson(points)
-        val encrypted = ScmCaptchaCrypto.encryptPointJson(pointJson, ch.secretKey)
-        val verification = ScmCaptchaCrypto.buildVerification(ch.token, pointJson, ch.secretKey)
-        val owner = findViewTreeLifecycleOwner()
-        if (owner == null) {
-            // 兜底：拿不到 lifecycle 就直接给（旧行为）
-            onVerified?.invoke(verification)
-            return
-        }
-        prompt.text = "校验中…"
-        owner.lifecycleScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                runCatching { ScmClient.checkCaptcha(ch.token, encrypted) }.getOrDefault(false)
-            }
-            if (ok) {
-                prompt.text = "验证通过"
-                onVerified?.invoke(verification)
-            } else {
-                prompt.text = "点选有误，正在换一张…"
-                onRequestRefresh?.invoke()
-            }
+            prompt.text = "验证通过"
+            onVerified?.invoke(ch.verificationToken)
         }
     }
 

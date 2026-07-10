@@ -43,4 +43,43 @@ class RsiInventoryClientTest {
 
         assertNull(info.maxLinkedPage)
     }
+
+    @Test
+    fun buildsReclaimPledgeRequestLikeRsiHangarApi() {
+        val request = RsiInventoryClient.accountActionRequest(
+            RsiAccountAction.Reclaim(pledgeId = "12345", currentPassword = "secret")
+        )
+
+        assertEquals("api/account/reclaimPledge", request.endpoint)
+        assertEquals("12345", request.body.getString("pledge_id"))
+        assertEquals("secret", request.body.getString("current_password"))
+    }
+
+    @Test
+    fun buildsGiftPledgeRequestLikeRsiHangarApi() {
+        val request = RsiInventoryClient.accountActionRequest(
+            RsiAccountAction.Gift(
+                pledgeId = "12345",
+                currentPassword = "secret",
+                email = "target@example.com",
+                name = "Friend"
+            )
+        )
+
+        assertEquals("api/account/giftPledge", request.endpoint)
+        assertEquals("12345", request.body.getString("pledge_id"))
+        assertEquals("secret", request.body.getString("current_password"))
+        assertEquals("target@example.com", request.body.getString("email"))
+        assertEquals("Friend", request.body.getString("name"))
+    }
+
+    @Test
+    fun buildsCancelGiftRequestLikeRsiHangarApi() {
+        val request = RsiInventoryClient.accountActionRequest(
+            RsiAccountAction.CancelGift(pledgeId = "12345")
+        )
+
+        assertEquals("api/account/cancelGift", request.endpoint)
+        assertEquals("12345", request.body.getString("pledge_id"))
+    }
 }

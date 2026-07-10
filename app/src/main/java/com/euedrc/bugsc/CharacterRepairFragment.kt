@@ -15,6 +15,7 @@ import android.widget.TextView
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 
 class CharacterRepairFragment : Fragment() {
     private lateinit var webView: WebView
@@ -60,12 +61,17 @@ class CharacterRepairFragment : Fragment() {
             }
         }
 
-        btnReload.setOnClickListener { loadRepairPage() }
+        btnReload.setOnClickListener {
+            track("reload")
+            loadRepairPage()
+        }
         btnBack.setOnClickListener {
+            track("back")
             if (webView.canGoBack()) webView.goBack()
             updateNavButtons()
         }
         btnForward.setOnClickListener {
+            track("forward")
             if (webView.canGoForward()) webView.goForward()
             updateNavButtons()
         }
@@ -87,6 +93,10 @@ class CharacterRepairFragment : Fragment() {
     private fun updateNavButtons() {
         btnBack.isEnabled = webView.canGoBack()
         btnForward.isEnabled = webView.canGoForward()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("character_repair", feature)
     }
 
     override fun onDestroyView() {

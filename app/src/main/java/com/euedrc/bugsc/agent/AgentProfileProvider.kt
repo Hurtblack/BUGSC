@@ -6,7 +6,7 @@ object AgentProfileProvider {
             .substringBefore('，')
             .substringBefore(',')
             .trim()
-        return "$shortIntro\n可以问我“我可以干嘛”来了解我的能力。"
+        return "$shortIntro\n需要查船、矿物、蓝图、任务、市场行情或机库状态，直接告诉我目标就行。"
     }
 
     fun defaultProfile(): AgentProfile = AgentProfile(

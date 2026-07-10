@@ -14,6 +14,9 @@ import androidx.navigation.fragment.findNavController
 import com.euedrc.bugsc.ARG_RETURN_ARGS
 import com.euedrc.bugsc.ARG_RETURN_DEST
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
+import com.euedrc.bugsc.data.AppLoginResult
+import com.euedrc.bugsc.data.AppServices
 import com.euedrc.bugsc.finishLogin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,6 +24,7 @@ import kotlinx.coroutines.withContext
 
 /** SCM 邮箱密码登录 + 文字点选验证码，含"去注册 / 忘密"入口。 */
 class ScmLoginFragment : Fragment() {
+    private val auth get() = AppServices.auth
 
     private lateinit var etEmail: EditText
     private lateinit var etPassword: EditText
@@ -48,15 +52,22 @@ class ScmLoginFragment : Fragment() {
         tvError = view.findViewById(R.id.tv_error)
         btnLogin = view.findViewById(R.id.btn_login)
 
-        captchaView.onRequestRefresh = { loadCaptcha() }
+        captchaView.onRequestRefresh = {
+            track("refresh_captcha")
+            loadCaptcha()
+        }
         captchaView.onVerified = {
             pendingVerification = it
             tvStatus.text = "验证码已采集，点击登录"
         }
         loadCaptcha()
 
-        btnLogin.setOnClickListener { attemptLogin() }
+        btnLogin.setOnClickListener {
+            track(if (newDeviceMode) "login_new_device" else "login")
+            attemptLogin()
+        }
         view.findViewById<View>(R.id.btn_register).setOnClickListener {
+            track("open_register")
             findNavController().navigate(
                 R.id.action_ScmLogin_to_ScmRegister,
                 bundleOf(ARG_RETURN_DEST to returnDestId()).apply {
@@ -65,6 +76,7 @@ class ScmLoginFragment : Fragment() {
             )
         }
         view.findViewById<View>(R.id.btn_forgot).setOnClickListener {
+            track("open_reset_password")
             findNavController().navigate(
                 R.id.action_ScmLogin_to_ScmPassword,
                 bundleOf("mode" to "reset"),
@@ -78,7 +90,7 @@ class ScmLoginFragment : Fragment() {
         pendingVerification = null
         captchaView.showLoading()
         viewLifecycleOwner.lifecycleScope.launch {
-            val challenge = withContext(Dispatchers.IO) { runCatching { ScmClient.getCaptcha() }.getOrNull() }
+            val challenge = withContext(Dispatchers.IO) { runCatching { auth.getCaptcha() }.getOrNull() }
             if (challenge != null) captchaView.setChallenge(challenge)
             else captchaView.showError("验证码加载失败，点击换一张重试")
         }
@@ -101,15 +113,18 @@ class ScmLoginFragment : Fragment() {
         btnLogin.isEnabled = false
         viewLifecycleOwner.lifecycleScope.launch {
             val outcome = withContext(Dispatchers.IO) {
-                runCatching { ScmClient.emailLogin(email, password, verification, emailCode) }
-                    .getOrElse { ScmLoginOutcome.Failure(-1, it.message ?: "网络错误") }
+                runCatching {
+                    auth.login(email, password, verification, emailCode)
+                }.getOrElse {
+                    AppLoginResult.Failure(it.message ?: "网络错误")
+                }
             }
             btnLogin.isEnabled = true
             when (outcome) {
-                is ScmLoginOutcome.Success -> finishLogin()
-                is ScmLoginOutcome.NeedEmailCode -> enterNewDeviceMode(outcome.msg)
-                is ScmLoginOutcome.Failure -> {
-                    showError(outcome.msg.ifBlank { "登录失败" })
+                is AppLoginResult.Success -> finishLogin()
+                is AppLoginResult.NeedEmailCode -> enterNewDeviceMode(outcome.message)
+                is AppLoginResult.Failure -> {
+                    showError(outcome.message.ifBlank { "登录失败" })
                     loadCaptcha()
                 }
             }
@@ -128,5 +143,9 @@ class ScmLoginFragment : Fragment() {
     private fun showError(message: String) {
         tvError.text = message
         tvError.visibility = View.VISIBLE
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("scm_login", feature)
     }
 }

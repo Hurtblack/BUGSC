@@ -73,6 +73,7 @@ class NewsFragment : Fragment() {
             }
         }
         tvPaging.setOnClickListener {
+            AnalyticsTracker.get(requireContext()).trackFeatureClick("news", "load_more")
             if (!pagination.isLoading) loadNextPage()
         }
         scrollView.setOnScrollChangeListener { _, _, scrollY, _, _ ->

@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# full 构建通过稳定反射入口安装本地私有数据源；具体客户端仍允许 R8 优化和混淆。
+-keep,allowoptimization class com.euedrc.bugsc.privateimpl.PrivateDistributionServices {
+    public static void install(android.content.Context);
+}

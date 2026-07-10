@@ -20,6 +20,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -84,6 +85,7 @@ class WikeloFragment : Fragment() {
             }
         })
         swHideOff.setOnCheckedChangeListener { _, isChecked ->
+            track("toggle_hide_unavailable")
             hideUnavailable = isChecked
             refresh()
         }
@@ -113,11 +115,13 @@ class WikeloFragment : Fragment() {
         barBranch.removeAllViews()
         // "全部" 在最前
         addChip(barBranch, "全部", branchFilter == null) {
+            track("filter_branch")
             branchFilter = null; categoryFilter = null
             buildBranchBar(); buildCategoryBar(); refresh()
         }
         for (b in WikeloBranch.entries) {
             addChip(barBranch, b.labelCn, branchFilter == b) {
+                track("filter_branch")
                 branchFilter = b; categoryFilter = null
                 buildBranchBar(); buildCategoryBar(); refresh()
             }
@@ -128,10 +132,12 @@ class WikeloFragment : Fragment() {
         barCategory.removeAllViews()
         val cats = repo?.categoriesIn(branchFilter).orEmpty()
         addChip(barCategory, "全部分类", categoryFilter == null) {
+            track("filter_category")
             categoryFilter = null; buildCategoryBar(); refresh()
         }
         for (c in cats) {
             addChip(barCategory, c, categoryFilter == c) {
+                track("filter_category")
                 categoryFilter = c; buildCategoryBar(); refresh()
             }
         }
@@ -306,6 +312,7 @@ class WikeloFragment : Fragment() {
             box.addView(src)
 
             box.setOnClickListener {
+                track("toggle_material")
                 val nowVisible = src.visibility == View.VISIBLE
                 src.visibility = if (nowVisible) View.GONE else View.VISIBLE
                 arrow.text = if (nowVisible) "▶" else "▼"
@@ -337,5 +344,9 @@ class WikeloFragment : Fragment() {
     private fun dp(v: Int): Int {
         val d = resources.displayMetrics.density
         return (v * d + 0.5f).toInt()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("wikelo", feature)
     }
 }

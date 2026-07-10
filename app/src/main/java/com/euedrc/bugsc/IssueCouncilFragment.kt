@@ -13,6 +13,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 
 class IssueCouncilFragment : Fragment() {
     private lateinit var webView: WebView
@@ -51,12 +52,17 @@ class IssueCouncilFragment : Fragment() {
             }
         }
 
-        btnReload.setOnClickListener { loadIssueCouncil() }
+        btnReload.setOnClickListener {
+            track("reload")
+            loadIssueCouncil()
+        }
         btnBack.setOnClickListener {
+            track("back")
             if (webView.canGoBack()) webView.goBack()
             updateNavButtons()
         }
         btnForward.setOnClickListener {
+            track("forward")
             if (webView.canGoForward()) webView.goForward()
             updateNavButtons()
         }
@@ -78,6 +84,10 @@ class IssueCouncilFragment : Fragment() {
     private fun updateNavButtons() {
         btnBack.isEnabled = webView.canGoBack()
         btnForward.isEnabled = webView.canGoForward()
+    }
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("issue_council", feature)
     }
 
     override fun onDestroyView() {

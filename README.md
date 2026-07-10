@@ -13,7 +13,7 @@ QQ群：330941212
 <table>
   <tr>
     <td align="center"><img src="screenshots/screenshot_tools.jpg" width="200"/><br/>工具</td>
-    <td align="center"><img src="screenshots/screenshot_hangar.jpg" width="200"/><br/>灯状态计时辅助</td>
+    <td align="center"><img src="screenshots/screenshot_agent.jpg" width="200"/><br/>MobiGuide</td>
     <td align="center"><img src="screenshots/screenshot_query.jpg" width="200"/><br/>查询</td>
     <td align="center"><img src="screenshots/screenshot_profile.jpg" width="200"/><br/>个人信息</td>
   </tr>
@@ -21,7 +21,7 @@ QQ群：330941212
     <td align="center"><img src="screenshots/screenshot_market.jpg" width="200"/><br/>SCM 市场</td>
     <td align="center"><img src="screenshots/screenshot_market_detail.jpg" width="200"/><br/>订单详情</td>
     <td align="center"><img src="screenshots/screenshot_news.jpg" width="200"/><br/>资讯</td>
-    <td></td>
+    <td align="center"><img src="screenshots/screenshot_hangar.jpg" width="200"/><br/>灯状态计时辅助</td>
   </tr>
 </table>
 
@@ -40,7 +40,7 @@ QQ群：330941212
 | **工具** | 每日 WB | ONLINE | 官网 Warbond 限时折扣船列表，同步最新 WB 价 / 原价；卡片直达 Ship Upgrades，详情入口可查看商品页 |
 | **工具** | MobiGuide(AI助手) | BETA | OpenAI-Compatible Tool Calling Agent Loop，默认 DeepSeek，可切换 Kimi / 小米 MiMo / 自定义 API |
 | **资讯** | 资讯 | ONLINE | citizenwiki 新闻接口直连，资讯列表 + 关键词搜索，点击跳转原文 |
-| **查询** | SCM 市场 | MARKET | flowcld SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、品质、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
+| **查询** | SCM 市场 | MARKET | SCM 出售/求购订单浏览与商品搜索；详情含 aUEC 价格、品质、卖家在线状态、交易日/时段/地点（维基链接）、捆绑商品明细 |
 | **查询** | 蓝图图鉴 | LOCAL | 配方查询、品质计算器、任务获取路径 |
 | **查询** | 任务搜索 | 4.8.2 | 按任务名/类型/奖励物品关键词搜索全部蓝图任务 |
 | **查询** | 飞船查找 | BETA | 飞船槽位配装 + 电力面板计算；支持中文名/英文名/ship id 直接搜索 |
@@ -101,7 +101,6 @@ app/src/main/
 │   │   ├── WbRepository.kt           # 本地缓存 + 远程同步
 │   │   └── WbRemoteClient.kt         # 手机端匿名抓取 RSI 官网 WB 数据
 │   ├── market/
-│   │   ├── ScmMarketClient.kt        # flowcld SCM 市场 API 客户端
 │   │   ├── MarketOrder.kt            # 订单/商品数据模型
 │   │   ├── MarketFragment.kt         # 市场列表页（出售/求购/搜索）
 │   │   └── MarketDetailFragment.kt   # 订单详情页
@@ -118,6 +117,12 @@ app/src/main/
     ├── wb/                      # 每日 WB 兜底快照
     └── shipfit/                 # 飞船配装静态数据
 ```
+
+---
+
+## Data Sources
+
+The open-source build uses local assets and disabled/mock online data sources. Private or third-party online integrations are intentionally kept behind interfaces and are not distributed with this repository. See [Data Source Boundary](docs/data-source-boundary.md).
 
 ---
 
@@ -252,16 +257,16 @@ MobiGuide 可以根据自然语言判断是否需要查询市场或创建订单�
 |---|---|---|
 | `gen_sccraft_blueprints.py` | `sccraft_blueprints.json` | sc-craft.tools（配方品质曲线 + 任务列表） |
 | `gen_item_base_stats.py` | `item_base_stats.json` | star-citizen.wiki（物品基准属性值） |
-| `gen_blueprint_missions.py` | `scm_blueprint_missions.json` | flowcld SCM（奖励任务详情） |
-| `gen_mission_translations.py` | `mission_translations.json` | flowcld SCM（任务名 EN→中） |
-| `export_scm_data.py` | `scm_translations.json` 等 | flowcld SCM（翻译表 + 配方线索） |
+| `gen_blueprint_missions.py` | `scm_blueprint_missions.json` | SCM（奖励任务详情） |
+| `gen_mission_translations.py` | `mission_translations.json` | SCM（任务名 EN→中） |
+| `export_scm_data.py` | `scm_translations.json` 等 | SCM（翻译表 + 配方线索） |
 | 手工维护 | `scm_blueprint_hints.json` | 备注/提示 |
 
 > 发布时把脚本的 `--version` 递增（整数），App 据此判断是否下载新数据。
 
 ### 矿物
 
-数据来自 Star Miner (sm.scmdb.net) + flowcld SCM 翻译。文件名带 SC 版本号会变，脚本会自动解析最新文件名。**有依赖顺序：先跑 `export_mining_data.py`**（另两个脚本要读它产出的 `mining_data.json`）：
+数据来自 Star Miner (sm.scmdb.net) + SCM 翻译。文件名带 SC 版本号会变，脚本会自动解析最新文件名。**有依赖顺序：先跑 `export_mining_data.py`**（另两个脚本要读它产出的 `mining_data.json`）：
 
 | 脚本 | 产出（`assets/mining/`） | 说明 |
 |---|---|---|
@@ -323,8 +328,6 @@ WB 列表中的主点击入口固定为 RSI `Ship Upgrades` 页面，符合 WBCC
 ## 发布规则
 
 公开源码和正式 APK Release 分开管理：公开源码版本不包含 SCM 账号、交易、聊天等受保护后端接口链路；正式 APK 可由本地或私有仓库的完整代码构建。
-
-具体规则见 [`docs/release-policy.md`](docs/release-policy.md)。
 
 ---
 

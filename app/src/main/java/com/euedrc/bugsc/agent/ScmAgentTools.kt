@@ -1,25 +1,32 @@
 package com.euedrc.bugsc.agent
 
 import com.euedrc.bugsc.market.MarketOrder
-import com.euedrc.bugsc.market.ScmMarketClient
+import com.euedrc.bugsc.data.AppServices
+import com.euedrc.bugsc.data.AuthDataSource
+import com.euedrc.bugsc.data.MarketOrderDataSource
+import com.euedrc.bugsc.data.MarketPublishDataSource
+import com.euedrc.bugsc.data.TransactionDataSource
 import com.euedrc.bugsc.market.publish.ItemSearchResult
-import com.euedrc.bugsc.market.publish.MarketPublishClient
 import com.euedrc.bugsc.market.publish.OwnMarketOrder
 import com.euedrc.bugsc.market.publish.PublishCreatorType
 import com.euedrc.bugsc.market.publish.PublishExpireTime
 import com.euedrc.bugsc.market.publish.PublishOrderPage
 import com.euedrc.bugsc.market.publish.PublishOrderStatus
-import com.euedrc.bugsc.market.transaction.TransactionClient
 import com.euedrc.bugsc.market.transaction.TransactionPage
 import com.euedrc.bugsc.market.transaction.TransactionRecord
-import com.euedrc.bugsc.scm.ScmClient
-import com.euedrc.bugsc.scm.ScmAuthStore
 import com.euedrc.bugsc.scm.ScmResult
 import com.euedrc.bugsc.scm.SignInSummary
 import org.json.JSONArray
 import org.json.JSONObject
 import java.math.BigDecimal
 import java.net.URLEncoder
+import kotlin.math.ceil
+import kotlin.math.max
+
+data class ScmMarketSearchResult(
+    val orders: List<MarketOrder>,
+    val total: Int? = null,
+)
 
 interface ScmAgentGateway {
     fun request(path: String): JSONObject
@@ -27,10 +34,12 @@ interface ScmAgentGateway {
     fun searchOrders(keyword: String): List<MarketOrder>
     fun searchOrders(keyword: String, creatorType: Int?): List<MarketOrder> =
         creatorType?.let { type -> searchOrders(keyword).filter { it.creatorType == type } } ?: searchOrders(keyword)
+    fun searchOrderResults(keyword: String, creatorType: Int?, limit: Int): ScmMarketSearchResult =
+        ScmMarketSearchResult(searchOrders(keyword, creatorType).take(limit), null)
     fun ownOrders(pageNo: Int, pageSize: Int = 20, creatorType: PublishCreatorType? = null): PublishOrderPage =
-        PublishOrderPage(emptyList(), 0)
+        PublishOrderPage(emptyList(), 0L)
     fun transactionPage(pageNo: Int, pageSize: Int = 20): TransactionPage =
-        TransactionPage(emptyList(), 0)
+        TransactionPage(emptyList(), 0L)
     fun signInSummary(): SignInSummary? = null
     fun signIn(): ScmResult = ScmResult(false, "签到暂不可用", -1)
     fun updateOwnOrder(
@@ -47,38 +56,69 @@ interface ScmAgentGateway {
 }
 
 class DefaultScmAgentGateway(
-    private val publishClient: MarketPublishClient = MarketPublishClient(),
-    private val marketClient: ScmMarketClient = ScmMarketClient(),
-    private val transactionClient: TransactionClient = TransactionClient(),
+    private val auth: AuthDataSource = AppServices.auth,
+    private val marketPublish: MarketPublishDataSource = AppServices.marketPublish,
+    private val marketOrders: MarketOrderDataSource = AppServices.marketOrders,
+    private val transactions: TransactionDataSource = AppServices.transactions,
 ) : ScmAgentGateway {
     override fun request(path: String): JSONObject =
-        JSONObject(ScmAuthStore.api().request("GET", path).body)
+        JSONObject()
 
     override fun searchItems(keyword: String): List<ItemSearchResult> =
-        publishClient.searchItems(keyword)
+        runBlockingGateway { marketPublish.searchItems(keyword) }
 
     override fun searchOrders(keyword: String): List<MarketOrder> =
-        marketClient.fetchPage(creatorType = 1, pageNo = 1, pageSize = 5, keyword = keyword).list +
-            marketClient.fetchPage(creatorType = 0, pageNo = 1, pageSize = 5, keyword = keyword).list
+        searchOrderResults(keyword, creatorType = null, limit = DEFAULT_MARKET_FETCH_LIMIT).orders
 
     override fun searchOrders(keyword: String, creatorType: Int?): List<MarketOrder> =
-        if (creatorType == null) {
-            searchOrders(keyword)
+        searchOrderResults(keyword, creatorType, limit = DEFAULT_MARKET_FETCH_LIMIT).orders
+
+    override fun searchOrderResults(keyword: String, creatorType: Int?, limit: Int): ScmMarketSearchResult {
+        val safeLimit = limit.coerceIn(1, MAX_MARKET_FETCH_LIMIT)
+        return if (creatorType == null) {
+            val sell = fetchMarketOrders(keyword, creatorType = 1, limit = safeLimit)
+            val buy = fetchMarketOrders(keyword, creatorType = 0, limit = safeLimit)
+            ScmMarketSearchResult(
+                orders = sell.orders + buy.orders,
+                total = (sell.total ?: sell.orders.size) + (buy.total ?: buy.orders.size),
+            )
         } else {
-            marketClient.fetchPage(creatorType = creatorType, pageNo = 1, pageSize = 5, keyword = keyword).list
+            fetchMarketOrders(keyword, creatorType, safeLimit)
         }
+    }
+
+    private fun fetchMarketOrders(keyword: String, creatorType: Int, limit: Int): ScmMarketSearchResult {
+        val pageSize = MARKET_PAGE_SIZE
+        val pages = ceil(limit / pageSize.toDouble()).toInt().coerceIn(1, MAX_MARKET_PAGES)
+        val orders = mutableListOf<MarketOrder>()
+        var total: Int? = null
+        for (pageNo in 1..pages) {
+            val page = runBlockingGateway {
+                marketOrders.fetchPage(
+                    creatorType = creatorType,
+                    pageNo = pageNo,
+                    pageSize = pageSize,
+                    keyword = keyword,
+                )
+            }
+            total = max(total ?: 0, page.total)
+            orders += page.list
+            if (orders.size >= limit || page.list.isEmpty() || orders.size >= page.total) break
+        }
+        return ScmMarketSearchResult(orders.take(limit), total)
+    }
 
     override fun ownOrders(pageNo: Int, pageSize: Int, creatorType: PublishCreatorType?): PublishOrderPage =
-        publishClient.ownOrders(pageNo = pageNo, pageSize = pageSize, creatorType = creatorType)
+        runBlockingGateway { marketPublish.ownOrders(pageNo = pageNo, pageSize = pageSize, creatorType = creatorType) }
 
     override fun transactionPage(pageNo: Int, pageSize: Int): TransactionPage =
-        transactionClient.page(pageNo = pageNo, pageSize = pageSize)
+        runBlockingGateway { transactions.page(pageNo = pageNo, pageSize = pageSize) }
 
     override fun signInSummary(): SignInSummary? =
-        ScmClient.signInSummary()
+        runBlockingGateway { auth.signInSummary() }
 
     override fun signIn(): ScmResult =
-        ScmClient.signIn()
+        runBlockingGateway { auth.signIn() }
 
     override fun updateOwnOrder(
         orderNumber: String,
@@ -88,19 +128,29 @@ class DefaultScmAgentGateway(
         expireTime: PublishExpireTime,
         quality: Int?,
     ) {
-        publishClient.updateOrder(orderNumber, unitPrice, remainingQuantity, status, expireTime, quality)
+        runBlockingGateway { marketPublish.updateOrder(orderNumber, unitPrice, remainingQuantity, status, expireTime, quality) }
     }
 
     override fun setOwnOrderStatus(orderNumber: String, status: PublishOrderStatus) {
-        publishClient.setOrderStatus(orderNumber, status)
+        runBlockingGateway { marketPublish.setOrderStatus(orderNumber, status) }
     }
 
     override fun deleteOwnOrder(orderNumber: String) {
-        publishClient.deleteOrder(orderNumber)
+        runBlockingGateway { marketPublish.deleteOrder(orderNumber) }
     }
 
     override fun quantityAdd(orderNumber: String) {
-        publishClient.quantityAdd(orderNumber)
+        runBlockingGateway { marketPublish.quantityAdd(orderNumber) }
+    }
+
+    private fun <T> runBlockingGateway(block: suspend () -> T): T =
+        kotlinx.coroutines.runBlocking { block() }
+
+    private companion object {
+        const val DEFAULT_MARKET_FETCH_LIMIT = 20
+        const val MAX_MARKET_FETCH_LIMIT = 90
+        const val MARKET_PAGE_SIZE = 20
+        const val MAX_MARKET_PAGES = 5
     }
 }
 
@@ -111,14 +161,14 @@ object ScmAgentTools {
     ): List<AgentTool> = listOf(
         ScmBlueprintSearchTool(gateway, entityIndex),
         ScmItemSearchTool(gateway, entityIndex),
-        ScmMyOrdersTool(gateway, isLoggedIn = { ScmAuthStore.isLoggedIn }),
-        ScmManageMyOrderTool(gateway, isLoggedIn = { ScmAuthStore.isLoggedIn }),
+        ScmMyOrdersTool(gateway, isLoggedIn = { AppServices.auth.isLoggedIn() }),
+        ScmManageMyOrderTool(gateway, isLoggedIn = { AppServices.auth.isLoggedIn() }),
         ScmMarketActivityTool(
             gateway = gateway,
-            isLoggedIn = { ScmAuthStore.isLoggedIn },
-            currentUserId = { ScmAuthStore.session().userId },
+            isLoggedIn = { AppServices.auth.isLoggedIn() },
+            currentUserId = { AppServices.auth.currentUserId() },
         ),
-        ScmSignInTool(gateway, isLoggedIn = { ScmAuthStore.isLoggedIn }),
+        ScmSignInTool(gateway, isLoggedIn = { AppServices.auth.isLoggedIn() }),
         ScmMarketOrderSearchTool(gateway, entityIndex),
     )
 }
@@ -652,31 +702,44 @@ class ScmMarketOrderSearchTool(
     override val parameters: List<AgentToolParameter> = listOf(
         AgentToolParameter("query", "可选：要查询的物品名或关键词；为空时返回当前市场订单列表", required = false),
         AgentToolParameter("side", "可选：sell 查询出售挂单；buy 查询求购挂单；不确定时留空", required = false),
+        AgentToolParameter("page", "可选：第几页，默认 1；用户说继续/下一页时递增", required = false),
+        AgentToolParameter("limit", "可选：每页最多返回条数，默认 20，最大 30", required = false),
     )
 
     override suspend fun run(call: AgentToolCall): AgentToolResult {
         val term = call.args["query"].orEmpty().ifBlank { call.args["term"].orEmpty() }.trim()
+        val page = call.args["page"].orEmpty().toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val limit = call.args["limit"].orEmpty().toIntOrNull()?.coerceIn(1, 30) ?: 20
+        val fetchCount = (page * limit).coerceIn(1, 90)
         val creatorType = when (call.args["side"].orEmpty().trim().lowercase()) {
             "sell", "出售", "selling" -> 1
             "buy", "求购", "buying" -> 0
             else -> null
         }
-        val orders = if (term.isBlank()) {
-            gateway.searchOrders("", creatorType)
-                .filter { it.remainingQuantity > 0 }
-                .sortedWith(compareBy<MarketOrder> { it.creatorType }.thenBy { it.unitPrice })
-                .take(5)
+        val searchResult = if (term.isBlank()) {
+            gateway.searchOrderResults("", creatorType, fetchCount)
         } else {
             ScmSearchTermExpander.expand(term, entityIndex)
                 .asSequence()
-                .map { candidate ->
-                    gateway.searchOrders(candidate, creatorType)
-                        .filter { it.remainingQuantity > 0 }
-                        .sortedBy { it.unitPrice }
-                        .take(5)
-                }
-                .firstOrNull { it.isNotEmpty() }
-                .orEmpty()
+                .map { candidate -> gateway.searchOrderResults(candidate, creatorType, fetchCount) }
+                .firstOrNull { it.orders.any { order -> order.remainingQuantity > 0 } }
+                ?: ScmMarketSearchResult(emptyList(), 0)
+        }
+        val ordered = if (term.isBlank()) {
+            searchResult.orders
+                .filter { it.remainingQuantity > 0 }
+                .sortedWith(compareBy<MarketOrder> { it.creatorType }.thenBy { it.unitPrice })
+        } else {
+            searchResult.orders
+                .filter { it.remainingQuantity > 0 }
+                .sortedBy { it.unitPrice }
+        }
+        val totalMatches = searchResult.total ?: ordered.size
+        val orders = ordered
+            .drop((page - 1) * limit)
+            .take(limit)
+        if (orders.isEmpty() && page > 1 && totalMatches > 0) {
+            return noResult(call, "第 $page 页没有更多 SCM 市场挂单；当前共命中 $totalMatches 条。")
         }
         if (orders.isEmpty()) {
             val target = term.ifBlank {
@@ -688,7 +751,7 @@ class ScmMarketOrderSearchTool(
             }
             return noResult(call, "没有查到“$target”的 SCM 市场挂单。")
         }
-        val visibleOrders = orders.take(5)
+        val visibleOrders = orders
         val participantLabel = when {
             visibleOrders.all { it.creatorType == 1 } -> "卖家"
             visibleOrders.all { it.creatorType == 0 } -> "买家"
@@ -703,7 +766,13 @@ class ScmMarketOrderSearchTool(
             .map { it.nickname.ifBlank { it.creatorId.toString() } }
             .distinct()
             .size
-        val summaryHeader = "当前有 $participantCount 个$participantLabel$actionLabel"
+        val shownUntil = ((page - 1) * limit) + visibleOrders.size
+        val remaining = (totalMatches - shownUntil).coerceAtLeast(0)
+        val summaryHeader = buildString {
+            append("当前有 $participantCount 个$participantLabel$actionLabel")
+            append("；共命中 $totalMatches 条，第 $page 页展示 ${visibleOrders.size} 条")
+            if (remaining > 0) append("，还有 $remaining 条未显示")
+        }
         return AgentToolResult(
             call = call,
             summary = (listOf(summaryHeader) + visibleOrders.map {
@@ -725,6 +794,10 @@ class ScmMarketOrderSearchTool(
             }).joinToString("\n"),
             facts = listOf(
                 AgentFact("${participantLabel}数量", participantCount.toString()),
+                AgentFact("命中总数", totalMatches.toString()),
+                AgentFact("当前页", page.toString()),
+                AgentFact("本页数量", visibleOrders.size.toString()),
+                AgentFact("未显示数量", remaining.toString()),
             ) + visibleOrders.flatMap {
                 listOfNotNull(
                     AgentFact("订单", it.orderNumber),

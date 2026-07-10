@@ -17,6 +17,7 @@ import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.euedrc.bugsc.R
+import com.euedrc.bugsc.analytics.AnalyticsTracker
 import com.google.android.material.chip.Chip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -68,9 +69,16 @@ class BlueprintFragment : Fragment() {
 
         repo = BlueprintDataRepository(requireContext())
 
-        btnSearch.setOnClickListener { applyFilter() }
+        btnSearch.setOnClickListener {
+            track("search")
+            applyFilter()
+        }
         etSearch.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) { applyFilter(); true } else false
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                track("search")
+                applyFilter()
+                true
+            } else false
         }
         etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -78,6 +86,7 @@ class BlueprintFragment : Fragment() {
             override fun afterTextChanged(s: Editable?) { applyFilter() }
         })
         btnMore.setOnClickListener {
+            track("load_more")
             displayCount += PAGE_SIZE
             if (isMissionMode) renderMissionList() else renderList()
         }
@@ -153,6 +162,7 @@ class BlueprintFragment : Fragment() {
             setTextColor(if (isSelected) Color.parseColor("#001119") else Color.parseColor("#7c95a8"))
             isChecked = isSelected
             setOnClickListener {
+                track(if (key == CAT_MISSIONS) "category_missions" else "category_filter")
                 selectedCategory = key
                 setupCategoryChips()
                 displayCount = PAGE_SIZE
@@ -289,6 +299,7 @@ class BlueprintFragment : Fragment() {
     }
 
     private fun openDetail(nameEn: String) {
+        track("open_detail")
         val sheet = BlueprintDetailSheet.newInstance(nameEn)
         sheet.show(parentFragmentManager, "blueprint_detail")
     }
@@ -354,6 +365,7 @@ class BlueprintFragment : Fragment() {
             isClickable = true
             isFocusable = true
             setOnClickListener {
+                track("open_mission_detail")
                 MissionDetailSheet.newInstance(m.guid).show(parentFragmentManager, "mission_detail")
             }
         }
@@ -397,6 +409,10 @@ class BlueprintFragment : Fragment() {
     }
 
     private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
+
+    private fun track(feature: String) {
+        AnalyticsTracker.get(requireContext()).trackFeatureClick("blueprint", feature)
+    }
 
     companion object {
         private const val CAT_ALL = "__all__"
